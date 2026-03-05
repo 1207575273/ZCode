@@ -2,7 +2,7 @@ import { defineConfig } from 'tsup'
 
 export default defineConfig({
   entry: ['bin/zcli.ts'],
-  outDir: 'dist',
+  outDir: 'dist/bin',
   format: ['esm'],
   target: 'node20',
   splitting: false,
