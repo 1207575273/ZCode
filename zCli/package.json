@@ -52,7 +52,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/marked": "^6.0.0",
     "@types/node": "^25.3.3",
-    "@types/react": "^19.2.14",
+    "@types/react": "^18.3.28",
     "@vitest/coverage-v8": "^4.0.18",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0",
