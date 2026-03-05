@@ -1,5 +1,6 @@
 // src/ui/App.tsx
 import React, { useState } from 'react'
+import { randomUUID } from 'node:crypto'
 import { Box, useApp } from 'ink'
 import { WelcomeScreen } from './WelcomeScreen.js'
 import { ChatView, type ChatMessage } from './ChatView.js'
@@ -21,12 +22,13 @@ export function App({
   const [messages, setMessages] = useState<ChatMessage[]>([])
 
   function handleSubmit(text: string) {
+    if (!text.trim()) return
     if (text === '/exit' || text === '/quit') {
       exit()
       return
     }
     const msg: ChatMessage = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      id: randomUUID(),
       role: 'user',
       content: text,
     }
