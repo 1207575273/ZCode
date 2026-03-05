@@ -2,10 +2,16 @@
 import React from 'react'
 import { Box, Text } from 'ink'
 
-interface ChatMessage {
+export interface ChatMessage {
+  id: string
   role: 'user' | 'assistant'
   content: string
 }
+
+const ROLE_CONFIG = {
+  user: { color: 'green' as const, label: '> 你' },
+  assistant: { color: 'cyan' as const, label: '◆ ZCli' },
+} as const
 
 interface ChatViewProps {
   messages: ChatMessage[]
@@ -14,10 +20,10 @@ interface ChatViewProps {
 export function ChatView({ messages }: ChatViewProps) {
   return (
     <Box flexDirection="column" paddingX={1} flexGrow={1}>
-      {messages.map((msg, i) => (
-        <Box key={i} marginBottom={1} flexDirection="column">
-          <Text color={msg.role === 'user' ? 'green' : 'cyan'} bold>
-            {msg.role === 'user' ? '> 你' : '◆ ZCli'}
+      {messages.map((msg) => (
+        <Box key={msg.id} marginBottom={1} flexDirection="column">
+          <Text color={ROLE_CONFIG[msg.role].color} bold>
+            {ROLE_CONFIG[msg.role].label}
           </Text>
           <Text>{msg.content}</Text>
         </Box>

@@ -3,6 +3,8 @@ import React, { useState } from 'react'
 import { Box, Text } from 'ink'
 import TextInput from 'ink-text-input'
 
+const SEPARATOR_WIDTH = 60
+
 interface InputBarProps {
   onSubmit: (value: string) => void
   placeholder?: string
@@ -21,7 +23,7 @@ export function InputBar({ onSubmit, placeholder = 'Try "how does <filepath> wor
   return (
     <Box flexDirection="column">
       <Box>
-        <Text dimColor>{'─'.repeat(60)}</Text>
+        <Text dimColor>{'─'.repeat(SEPARATOR_WIDTH)}</Text>
       </Box>
       <Box paddingLeft={1}>
         <Text color="green">❯ </Text>
