@@ -1,32 +1,47 @@
 // src/ui/App.tsx
-import React from 'react'
-import { Box, Text } from 'ink'
-import { StatusBar } from './StatusBar.js'
-import { ChatView } from './ChatView.js'
+import React, { useState } from 'react'
+import { Box, useApp } from 'ink'
+import { WelcomeScreen } from './WelcomeScreen.js'
+import { ChatView, type ChatMessage } from './ChatView.js'
+import { InputBar } from './InputBar.js'
 
 interface AppProps {
   model?: string
   provider?: string
-  sessionId?: string
+  cwd?: string
 }
 
 export function App({
   model = 'claude-opus-4-6',
   provider = 'anthropic',
-  sessionId = 'sess_00000000_000000_000',
+  cwd = process.cwd(),
 }: AppProps) {
+  const { exit } = useApp()
+  const [started, setStarted] = useState(false)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+
+  function handleSubmit(text: string) {
+    if (text === '/exit' || text === '/quit') {
+      exit()
+      return
+    }
+    const msg: ChatMessage = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      role: 'user',
+      content: text,
+    }
+    setMessages(prev => [...prev, msg])
+    if (!started) setStarted(true)
+  }
+
   return (
     <Box flexDirection="column" width="100%">
-      <Box paddingX={1} marginBottom={1}>
-        <Text bold color="blue">ZCli</Text>
-        <Text dimColor> — 多模型 AI 编程助手 v0.1.0</Text>
-      </Box>
-
-      <ChatView />
-
-      <Box marginTop={1}>
-        <StatusBar model={model} provider={provider} sessionId={sessionId} />
-      </Box>
+      {started ? (
+        <ChatView messages={messages} />
+      ) : (
+        <WelcomeScreen model={model} provider={provider} cwd={cwd} />
+      )}
+      <InputBar onSubmit={handleSubmit} />
     </Box>
   )
 }
