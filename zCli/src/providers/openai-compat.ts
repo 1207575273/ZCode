@@ -4,6 +4,7 @@ import { toLangChainMessages } from './message-converter.js'
 import type { LLMProvider, ChatRequest, ProviderProtocol } from './provider.js'
 import type { Message, StreamChunk } from '@core/types.js'
 import type { ProviderConfig } from '@config/config-manager.js'
+import { dbg } from '../debug.js'
 
 export class OpenAICompatProvider implements LLMProvider {
   readonly name: string
@@ -31,12 +32,19 @@ export class OpenAICompatProvider implements LLMProvider {
 
     const langchainMsgs = toLangChainMessages(request.messages)
 
+    dbg(`[DEBUG][${this.name}] chat request:\n`)
+    dbg(`  model: ${request.model}\n`)
+    dbg(`  baseURL: ${this.config.baseURL ?? '(default)'}\n`)
+    dbg(`  messages: ${JSON.stringify(request.messages, null, 2)}\n`)
+
     try {
       const streamOpts = request.signal !== undefined ? { signal: request.signal } : {}
       const stream = await model.stream(langchainMsgs, streamOpts)
 
+      dbg(`[DEBUG][${this.name}] stream opened, receiving chunks...\n`)
       for await (const chunk of stream) {
         const text = typeof chunk.content === 'string' ? chunk.content : ''
+        dbg(`[DEBUG][${this.name}] chunk: ${JSON.stringify(chunk)}\n`)
         if (text) {
           yield { type: 'text', text }
         }
@@ -44,6 +52,7 @@ export class OpenAICompatProvider implements LLMProvider {
 
       yield { type: 'done' }
     } catch (err) {
+      dbg(`[DEBUG][${this.name}] error: ${err}\n`)
       yield { type: 'error', error: err instanceof Error ? err.message : String(err) }
     }
   }

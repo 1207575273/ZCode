@@ -53,7 +53,7 @@ export function WelcomeScreen({ model, provider, cwd }: WelcomeScreenProps) {
           </Box>
           <Text color="white">{model}</Text>
           <Text dimColor>{provider}</Text>
-          <Text dimColor>{cwd}</Text>
+          <Text dimColor wrap="truncate">{cwd}</Text>
         </Box>
 
         {/* 竖分隔线 */}

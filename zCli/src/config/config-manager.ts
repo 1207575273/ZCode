@@ -25,7 +25,7 @@ const DEFAULT_CONFIG: ZCliConfig = {
     },
     glm: {
       apiKey: '',
-      baseURL: 'https://open.bigmodel.ai/api/paas/v4',
+      baseURL: 'https://open.bigmodel.cn/api/coding/paas/v4',
       models: ['glm-4-flash', 'glm-4-air', 'glm-4'],
     },
     openai: {
