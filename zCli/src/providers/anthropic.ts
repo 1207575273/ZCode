@@ -21,12 +21,17 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async *chat(request: ChatRequest): AsyncIterable<StreamChunk> {
-    const model = new ChatAnthropic({
+    const baseModel = new ChatAnthropic({
       apiKey: this.config.apiKey,
       model: request.model,
       ...(request.maxTokens !== undefined && { maxTokens: request.maxTokens }),
       ...(request.temperature !== undefined && { temperature: request.temperature }),
     })
+
+    // 有工具时绑定，bindTools 返回值类型与 baseModel 兼容
+    const model = (request.tools && request.tools.length > 0)
+      ? baseModel.bindTools(request.tools)
+      : baseModel
 
     const langchainMsgs = toLangChainMessages(request.messages)
 
@@ -39,11 +44,32 @@ export class AnthropicProvider implements LLMProvider {
       const stream = await model.stream(langchainMsgs, streamOpts)
 
       dbg(`[DEBUG][anthropic] stream opened, receiving chunks...\n`)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const allChunks: any[] = []
       for await (const chunk of stream) {
         const text = typeof chunk.content === 'string' ? chunk.content : ''
         dbg(`[DEBUG][anthropic] chunk: ${JSON.stringify(chunk)}\n`)
         if (text) {
           yield { type: 'text', text }
+        }
+        allChunks.push(chunk)
+      }
+
+      // 聚合 chunk，提取 tool_calls
+      if (allChunks.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const final = allChunks.reduce((a: any, b: any) => a.concat(b))
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const tc of (final.tool_calls ?? []) as any[]) {
+          yield {
+            type: 'tool_call',
+            toolCall: {
+              type: 'tool_call',
+              toolCallId: tc.id ?? '',
+              toolName: tc.name,
+              args: tc.args as Record<string, unknown>,
+            },
+          }
         }
       }
 

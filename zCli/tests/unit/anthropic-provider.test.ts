@@ -2,9 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock LangChain BEFORE importing provider
 vi.mock('@langchain/anthropic', () => {
+  const makeChunk = (content: string) => ({
+    content,
+    tool_calls: [] as unknown[],
+    concat(other: { content: string; tool_calls: unknown[] }) {
+      return makeChunk(this.content + other.content)
+    },
+  })
   const mockStream = async function* () {
-    yield { content: 'hello ' }
-    yield { content: 'world' }
+    yield makeChunk('hello ')
+    yield makeChunk('world')
   }
   return {
     ChatAnthropic: vi.fn().mockImplementation(function () {
@@ -54,5 +61,37 @@ describe('AnthropicProvider', () => {
     expect(doneChunks).toHaveLength(1)
     const fullText = textChunks.map(c => c.text).join('')
     expect(fullText).toBe('hello world')
+  })
+
+  it('chat 带 tools 时返回 tool_call chunk', async () => {
+    // 重新 mock，让 stream 返回带 tool_calls 的 chunk
+    const { ChatAnthropic } = await import('@langchain/anthropic')
+    const mockChunkWithTool = {
+      content: '',
+      tool_calls: [{ name: 'read_file', args: { path: 'foo.ts' }, id: 'call_1' }],
+      concat: (_other: unknown) => mockChunkWithTool,
+    }
+    vi.mocked(ChatAnthropic).mockImplementationOnce(function () {
+      return {
+        bindTools: vi.fn().mockReturnThis(),
+        stream: vi.fn().mockImplementation(async function* () {
+          yield mockChunkWithTool
+        }),
+        getNumTokens: vi.fn().mockResolvedValue(5),
+      } as unknown as InstanceType<typeof ChatAnthropic>
+    })
+
+    const req: ChatRequest = {
+      model: 'claude-sonnet-4-6',
+      messages: [{ role: 'user', content: 'read foo.ts' }],
+      tools: [{ name: 'read_file', description: 'read', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } }],
+    }
+    const chunks = []
+    for await (const chunk of provider.chat(req)) {
+      chunks.push(chunk)
+    }
+    const toolChunks = chunks.filter(c => c.type === 'tool_call')
+    expect(toolChunks).toHaveLength(1)
+    expect((toolChunks[0] as { type: string; toolCall?: { toolName: string } })?.toolCall?.toolName).toBe('read_file')
   })
 })

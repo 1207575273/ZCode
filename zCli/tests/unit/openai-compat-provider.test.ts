@@ -1,9 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@langchain/openai', () => {
+  const makeChunk = (content: string) => ({
+    content,
+    tool_calls: [] as unknown[],
+    concat(other: { content: string; tool_calls: unknown[] }) {
+      return makeChunk(this.content + other.content)
+    },
+  })
   const mockStream = async function* () {
-    yield { content: 'GLM ' }
-    yield { content: 'reply' }
+    yield makeChunk('GLM ')
+    yield makeChunk('reply')
   }
   return {
     ChatOpenAI: vi.fn().mockImplementation(function () {
@@ -51,5 +58,36 @@ describe('OpenAICompatProvider', () => {
     const text = chunks.filter(c => c.type === 'text').map(c => c.text).join('')
     expect(text).toBe('GLM reply')
     expect(chunks.at(-1)?.type).toBe('done')
+  })
+
+  it('chat 带 tools 时返回 tool_call chunk', async () => {
+    const { ChatOpenAI } = await import('@langchain/openai')
+    const mockChunkWithTool = {
+      content: '',
+      tool_calls: [{ name: 'read_file', args: { path: 'bar.ts' }, id: 'call_2' }],
+      concat: (_other: unknown) => mockChunkWithTool,
+    }
+    vi.mocked(ChatOpenAI).mockImplementationOnce(function () {
+      return {
+        bindTools: vi.fn().mockReturnThis(),
+        stream: vi.fn().mockImplementation(async function* () {
+          yield mockChunkWithTool
+        }),
+        getNumTokens: vi.fn().mockResolvedValue(5),
+      } as unknown as InstanceType<typeof ChatOpenAI>
+    })
+
+    const req: ChatRequest = {
+      model: 'glm-4-flash',
+      messages: [{ role: 'user', content: 'read bar.ts' }],
+      tools: [{ name: 'read_file', description: 'read', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } }],
+    }
+    const chunks = []
+    for await (const chunk of provider.chat(req)) {
+      chunks.push(chunk)
+    }
+    const toolChunks = chunks.filter(c => c.type === 'tool_call')
+    expect(toolChunks).toHaveLength(1)
+    expect((toolChunks[0] as { type: string; toolCall?: { toolName: string } })?.toolCall?.toolName).toBe('read_file')
   })
 })
