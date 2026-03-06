@@ -28,9 +28,13 @@ export class AnthropicProvider implements LLMProvider {
       ...(request.temperature !== undefined && { temperature: request.temperature }),
     })
 
-    // 有工具时绑定，bindTools 返回值类型与 baseModel 兼容
+    // 有工具时绑定，转换为 Anthropic tool 标准格式
     const model = (request.tools && request.tools.length > 0)
-      ? baseModel.bindTools(request.tools)
+      ? baseModel.bindTools(request.tools.map(t => ({
+          name: t.name,
+          description: t.description,
+          input_schema: t.parameters,
+        })))
       : baseModel
 
     const langchainMsgs = toLangChainMessages(request.messages)
