@@ -5,8 +5,8 @@ import type { Message, ToolCallContent } from './types.js'
 
 export type AgentEvent =
   | { type: 'text';               text: string }
-  | { type: 'tool_start';         toolName: string; args: Record<string, unknown> }
-  | { type: 'tool_done';          toolName: string; durationMs: number; success: boolean }
+  | { type: 'tool_start';         toolName: string; toolCallId: string; args: Record<string, unknown> }
+  | { type: 'tool_done';          toolName: string; toolCallId: string; durationMs: number; success: boolean }
   | { type: 'permission_request'; toolName: string; args: Record<string, unknown>; resolve: (allow: boolean) => void }
   | { type: 'error';              error: string }
   | { type: 'done' }
@@ -59,7 +59,7 @@ export class AgentLoop {
 
       // 执行每个工具调用
       for (const tc of pendingToolCalls) {
-        yield { type: 'tool_start', toolName: tc.toolName, args: tc.args }
+        yield { type: 'tool_start', toolName: tc.toolName, toolCallId: tc.toolCallId, args: tc.args }
 
         let allowed = true
 
@@ -77,7 +77,7 @@ export class AgentLoop {
             role: 'user',
             content: `[Tool ${tc.toolName} was rejected by user]`,
           })
-          yield { type: 'tool_done', toolName: tc.toolName, durationMs: 0, success: false }
+          yield { type: 'tool_done', toolName: tc.toolName, toolCallId: tc.toolCallId, durationMs: 0, success: false }
           continue
         }
 
@@ -93,7 +93,7 @@ export class AgentLoop {
             : `[Tool ${tc.toolName} error]: ${result.error ?? 'error'}`,
         })
 
-        yield { type: 'tool_done', toolName: tc.toolName, durationMs, success: result.success }
+        yield { type: 'tool_done', toolName: tc.toolName, toolCallId: tc.toolCallId, durationMs, success: result.success }
       }
     }
 

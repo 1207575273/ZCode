@@ -105,11 +105,11 @@ export function useChat(): UseChatReturn {
             setStreamingMessage(accumulated)
           } else if (event.type === 'tool_start') {
             const id = randomUUID()
-            pendingToolIds.set(event.toolName, id)
+            pendingToolIds.set(event.toolCallId, id)
             setToolEvents(prev => [...prev, { id, toolName: event.toolName, args: event.args, status: 'running' }])
           } else if (event.type === 'tool_done') {
-            const matchId = pendingToolIds.get(event.toolName)
-            if (matchId) pendingToolIds.delete(event.toolName)
+            const matchId = pendingToolIds.get(event.toolCallId)
+            if (matchId) pendingToolIds.delete(event.toolCallId)
             setToolEvents(prev => prev.map(e =>
               e.id === matchId
                 ? { ...e, status: event.success ? 'done' as const : 'error' as const, durationMs: event.durationMs }

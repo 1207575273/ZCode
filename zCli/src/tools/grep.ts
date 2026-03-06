@@ -26,7 +26,7 @@ export class GrepTool implements Tool {
     const recursive = args['recursive'] !== false
 
     try {
-      const regex = new RegExp(pattern, 'gi')
+      const regex = new RegExp(pattern, 'i')
       let files: string[]
 
       const stat = statSync(searchPath, { throwIfNoEntry: false })
@@ -46,7 +46,6 @@ export class GrepTool implements Tool {
             if (regex.test(line) && results.length < MAX_RESULTS) {
               results.push(`${file}:${i + 1}: ${line}`)
             }
-            regex.lastIndex = 0
           })
         } catch { /* 跳过无法读取的文件 */ }
       }
