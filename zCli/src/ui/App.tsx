@@ -1,10 +1,11 @@
 // src/ui/App.tsx
-import React, { useState } from 'react'
-import { randomUUID } from 'node:crypto'
-import { Box, useApp } from 'ink'
+import React from 'react'
+import { Box, Text, useApp } from 'ink'
 import { WelcomeScreen } from './WelcomeScreen.js'
-import { ChatView, type ChatMessage } from './ChatView.js'
+import { ChatView } from './ChatView.js'
 import { InputBar } from './InputBar.js'
+import { useChat } from './useChat.js'
+import { configManager } from '@config/config-manager.js'
 
 interface AppProps {
   model?: string
@@ -13,37 +14,46 @@ interface AppProps {
 }
 
 export function App({
-  model = 'claude-opus-4-6',
-  provider = 'anthropic',
+  model,
+  provider,
   cwd = process.cwd(),
 }: AppProps) {
   const { exit } = useApp()
-  const [started, setStarted] = useState(false)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const { messages, streamingMessage, isStreaming, error, submit, abort: _abort } = useChat()
+
+  // 从 config 读取当前模型/provider（props 可覆盖）
+  const config = configManager.load()
+  const currentModel = model ?? config.defaultModel
+  const currentProvider = provider ?? config.defaultProvider
+
+  const started = messages.length > 0 || isStreaming
 
   function handleSubmit(text: string) {
-    if (!text.trim()) return
     if (text === '/exit' || text === '/quit') {
       exit()
       return
     }
-    const msg: ChatMessage = {
-      id: randomUUID(),
-      role: 'user',
-      content: text,
-    }
-    setMessages(prev => [...prev, msg])
-    if (!started) setStarted(true)
+    submit(text)
   }
 
   return (
     <Box flexDirection="column" width="100%">
       {started ? (
-        <ChatView messages={messages} />
+        <ChatView messages={messages} streamingMessage={streamingMessage} />
       ) : (
-        <WelcomeScreen model={model} provider={provider} cwd={cwd} />
+        <WelcomeScreen model={currentModel} provider={currentProvider} cwd={cwd} />
       )}
-      <InputBar onSubmit={handleSubmit} />
+
+      {error != null && (
+        <Box paddingX={1}>
+          <Text color="red">✗ {error}</Text>
+        </Box>
+      )}
+
+      <InputBar
+        onSubmit={handleSubmit}
+        disabled={isStreaming}
+      />
     </Box>
   )
 }
