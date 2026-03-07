@@ -1,18 +1,30 @@
 // src/ui/App.tsx
-import React, { useState, useCallback, useMemo } from 'react'
-import { Box, Text, useApp } from 'ink'
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import { Box, Text, useApp, useInput } from 'ink'
 import { WelcomeScreen } from './WelcomeScreen.js'
 import { ChatView } from './ChatView.js'
 import { InputBar } from './InputBar.js'
 import { PermissionDialog } from './PermissionDialog.js'
 import { ModelPicker } from './ModelPicker.js'
 import type { ModelItem } from './ModelPicker.js'
+import { CommandSuggestion } from './CommandSuggestion.js'
+import type { SuggestionItem } from './CommandSuggestion.js'
 import { useChat } from './useChat.js'
 import { configManager } from '@config/config-manager.js'
 import { CommandRegistry } from '@commands/registry.js'
 import { ClearCommand } from '@commands/clear.js'
 import { HelpCommand } from '@commands/help.js'
 import { ModelCommand } from '@commands/model.js'
+
+/**
+ * App — ZCli 根组件
+ *
+ * 职责：
+ * - 组合所有 UI 模块（WelcomeScreen / ChatView / InputBar / CommandSuggestion / PermissionDialog / ModelPicker）
+ * - 维护顶层 UI 状态：inputValue、suggestionIndex、showModelPicker
+ * - 处理斜杠指令分发（CommandRegistry → Action → useChat 方法）
+ * - 管理指令建议浮层：过滤建议、键盘导航、Enter 防双触发
+ */
 
 interface AppProps {
   model?: string
@@ -45,6 +57,10 @@ export function App({
 
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [inputValue, setInputValue] = useState('')
+  const [suggestionIndex, setSuggestionIndex] = useState(0)
+  // useRef: read latest value in async callbacks without closure staleness
+  // (same dual-track pattern as allowedToolsRef in useChat)
+  const suggestionConsumedRef = useRef(false)
 
   const started = messages.length > 0 || isStreaming
 
@@ -70,8 +86,28 @@ export function App({
     return items
   }, [])
 
+  // suggestions: 当输入以 "/" 开头时实时过滤可用指令，驱动建议浮层显示
+  const suggestions: SuggestionItem[] = useMemo(() => {
+    if (!inputValue.startsWith('/')) return []
+    const query = inputValue.slice(1).toLowerCase()
+    return registry.getAll().filter(cmd =>
+      cmd.name.startsWith(query) ||
+      cmd.aliases?.some(a => a.startsWith(query))
+    )
+  }, [inputValue, registry])
+
+  // inputValue 变化时重置高亮索引，避免越界
+  useEffect(() => {
+    setSuggestionIndex(0)
+  }, [inputValue])
+
   const handleSubmit = useCallback((input: string) => {
     setInputValue('')
+    // 建议浮层已通过 useInput 处理了 Enter，跳过 InputBar.onSubmit 的重复触发
+    if (suggestionConsumedRef.current) {
+      suggestionConsumedRef.current = false
+      return
+    }
     const trimmed = input.trim()
     if (!trimmed) return
 
@@ -127,6 +163,24 @@ export function App({
     submit(trimmed)
   }, [registry, clearMessages, appendSystemMessage, switchModel, submit, modelItems, exit])
 
+  // isActive: 仅在浮层可见时拦截按键，防止与 TextInput 的正常 Enter 冲突
+  useInput((_input, key) => {
+    if (key.upArrow)   setSuggestionIndex(i => Math.max(0, i - 1))
+    if (key.downArrow) setSuggestionIndex(i => Math.min(suggestions.length - 1, i + 1))
+    if (key.return) {
+      const cmd = suggestions[suggestionIndex]
+      if (cmd) {
+        // suggestionConsumedRef 防止 InputBar.onSubmit 的重复触发：
+        // TextInput 会在同一渲染周期内也触发 onSubmit，
+        // handleSubmit 检测到 ref 为 true 时直接返回，避免双重执行。
+        suggestionConsumedRef.current = true
+        handleSubmit('/' + cmd.name)
+        setInputValue('')
+      }
+    }
+    if (key.escape) setInputValue('')
+  }, { isActive: suggestions.length > 0 })
+
   return (
     <Box flexDirection="column" width="100%">
       {started ? (
@@ -139,6 +193,10 @@ export function App({
         <Box paddingX={1}>
           <Text color="red">✗ {error}</Text>
         </Box>
+      )}
+
+      {suggestions.length > 0 && (
+        <CommandSuggestion items={suggestions} selectedIndex={suggestionIndex} />
       )}
 
       {pendingPermission != null ? (
