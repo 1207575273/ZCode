@@ -23,7 +23,7 @@ import { ModelCommand } from '@commands/model.js'
  * - 组合所有 UI 模块（WelcomeScreen / ChatView / InputBar / CommandSuggestion / PermissionDialog / ModelPicker）
  * - 维护顶层 UI 状态：inputValue、suggestionIndex、showModelPicker
  * - 处理斜杠指令分发（CommandRegistry → Action → useChat 方法）
- * - 管理指令建议浮层：过滤建议、键盘导航、Enter 防双触发
+ * - 管理指令建议浮层：过滤建议、键盘导航、Tab/Enter 补全到输入框
  */
 
 interface AppProps {
@@ -182,15 +182,14 @@ export function App({
         return next
       })
     }
-    if (key.return) {
-      const cmd = suggestions[suggestionIndexRef.current]  // 使用 ref 读取最新索引，避免闭包陈旧值
+    if (key.tab || key.return) {
+      const cmd = suggestions[suggestionIndexRef.current]
       if (cmd) {
-        // suggestionConsumedRef 防止 InputBar.onSubmit 的重复触发：
-        // TextInput 会在同一渲染周期内也触发 onSubmit，
-        // handleSubmit 检测到 ref 为 true 时直接返回，避免双重执行。
+        // suggestionConsumedRef: 阻断 TextInput.onSubmit 在同一 tick 触发 handleSubmit，
+        // 防止将未完整输入（如 "/cl"）当作消息提交。
+        // Tab 不触发 onSubmit，但与 return 共用同一分支，置 true 无副作用。
         suggestionConsumedRef.current = true
-        handleSubmit('/' + cmd.name)
-        // DO NOT call setInputValue('') here — handleSubmit already does it
+        setInputValue('/' + cmd.name + ' ')  // 尾部空格，方便继续输入参数
       }
     }
     if (key.escape) setInputValue('')
@@ -208,10 +207,6 @@ export function App({
         <Box paddingX={1}>
           <Text color="red">✗ {error}</Text>
         </Box>
-      )}
-
-      {suggestions.length > 0 && (
-        <CommandSuggestion items={suggestions} selectedIndex={suggestionIndex} />
       )}
 
       {pendingPermission != null ? (
@@ -239,6 +234,10 @@ export function App({
           onSubmit={handleSubmit}
           disabled={isStreaming}
         />
+      )}
+
+      {suggestions.length > 0 && (
+        <CommandSuggestion items={suggestions} selectedIndex={suggestionIndex} />
       )}
     </Box>
   )
