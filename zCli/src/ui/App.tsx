@@ -58,6 +58,8 @@ export function App({
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [inputValue, setInputValue] = useState('')
   const [suggestionIndex, setSuggestionIndex] = useState(0)
+  // Tab 补全后递增，使 InputBar key 变化以强制重挂载，确保 cursor 归位到末尾
+  const [inputResetKey, setInputResetKey] = useState(0)
   // useRef: read latest value in async callbacks without closure staleness
   // (same dual-track pattern as allowedToolsRef in useChat)
   const suggestionConsumedRef = useRef(false)
@@ -183,10 +185,12 @@ export function App({
       })
     }
     // Tab: 仅补全，不设 ref（Tab 不触发 onSubmit，无需防重触发）
+    // setInputResetKey 强制 InputBar 重挂载，使 ink-text-input 的 cursor 归位到末尾
     if (key.tab) {
       const cmd = suggestions[suggestionIndexRef.current]
       if (cmd) {
         setInputValue('/' + cmd.name + ' ')
+        setInputResetKey(k => k + 1)
       }
     }
     // Enter: 补全并设 ref，阻断 TextInput.onSubmit 的同 tick 重复触发
@@ -202,6 +206,12 @@ export function App({
       setInputValue('')
     }
   }, { isActive: suggestions.length > 0 })
+
+  // ModelPicker Esc 保险：在 App 层面直接监听 Esc，防止 ModelPicker 内部的
+  // useInput handler 因重渲染竞态丢失按键事件（belt-and-suspenders 策略）
+  useInput((_input, key) => {
+    if (key.escape) setShowModelPicker(false)
+  }, { isActive: showModelPicker })
 
   return (
     <Box flexDirection="column" width="100%">
@@ -237,6 +247,7 @@ export function App({
         />
       ) : (
         <InputBar
+          key={inputResetKey}
           value={inputValue}
           onChange={setInputValue}
           onSubmit={handleSubmit}
