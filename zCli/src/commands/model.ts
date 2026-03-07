@@ -28,6 +28,9 @@ export class ModelCommand implements Command {
     // Use a local variable to satisfy noUncheckedIndexedAccess — length check above
     // guarantees args[0] is defined, but TS cannot narrow array element types.
     const modelName = args[0] ?? ''
+    if (!modelName) {
+      return { handled: true, action: { type: 'show_model_picker' } }
+    }
     return {
       handled: true,
       action: { type: 'switch_model', provider: '', model: modelName },

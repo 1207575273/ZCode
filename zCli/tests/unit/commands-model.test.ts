@@ -72,18 +72,13 @@ describe('ModelCommand', () => {
     expect(result.action.provider).toBe('')
   })
 
-  // --- handled === true in all cases ---
+  // --- 边界：空字符串 model name 回退到 show_model_picker ---
 
-  it('handled should be true for no-args case', () => {
-    expect(makeCmd().execute([]).handled).toBe(true)
-  })
-
-  it('handled should be true for info case', () => {
-    expect(makeCmd().execute(['info']).handled).toBe(true)
-  })
-
-  it('handled should be true for direct-switch case', () => {
-    expect(makeCmd().execute(['some-model']).handled).toBe(true)
+  it('execute 空字符串 model name 回退到 show_model_picker', () => {
+    const cmd = makeCmd()
+    const result = cmd.execute([''])
+    expect(result.handled).toBe(true)
+    expect(result.action?.type).toBe('show_model_picker')
   })
 
   // --- 边界：extra args after "info" are ignored ---
