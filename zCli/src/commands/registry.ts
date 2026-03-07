@@ -23,7 +23,9 @@ export class CommandRegistry {
   dispatch(input: string): CommandResult {
     if (!input.startsWith('/')) return { handled: false }
 
-    const parts = input.slice(1).trim().split(/\s+/)
+    const trimmed = input.slice(1).trim()
+    if (!trimmed) return { handled: false }
+    const parts = trimmed.split(/\s+/)
     const name = parts[0] ?? ''
     const args = parts.slice(1)
 

@@ -50,6 +50,13 @@ describe('CommandRegistry', () => {
     expect(result.action?.type).toBe('clear_messages')
   })
 
+  it('dispatch 纯斜线或斜线加空格返回 handled: false', () => {
+    const reg = new CommandRegistry()
+    expect(reg.dispatch('/').handled).toBe(false)
+    expect(reg.dispatch('/ ').handled).toBe(false)
+    expect(reg.dispatch('/  ').handled).toBe(false)
+  })
+
   it('getAll 返回所有已注册指令（去重别名）', () => {
     const reg = new CommandRegistry()
     reg.register(makeCmd('clear'))
