@@ -44,6 +44,7 @@ export function App({
   } = useChat()
 
   const [showModelPicker, setShowModelPicker] = useState(false)
+  const [inputValue, setInputValue] = useState('')
 
   const started = messages.length > 0 || isStreaming
 
@@ -70,6 +71,7 @@ export function App({
   }, [])
 
   const handleSubmit = useCallback((input: string) => {
+    setInputValue('')
     const trimmed = input.trim()
     if (!trimmed) return
 
@@ -159,6 +161,8 @@ export function App({
         />
       ) : (
         <InputBar
+          value={inputValue}
+          onChange={setInputValue}
           onSubmit={handleSubmit}
           disabled={isStreaming}
         />

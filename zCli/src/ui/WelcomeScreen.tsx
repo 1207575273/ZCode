@@ -1,4 +1,13 @@
 // src/ui/WelcomeScreen.tsx
+
+/**
+ * WelcomeScreen — 初始欢迎界面。
+ *
+ * 在没有任何消息（started=false）时替代 ChatView 展示。
+ * 双栏布局：左栏显示 ASCII 机器人 + 当前模型/路径信息；
+ * 右栏显示使用提示和最近会话（当前为占位）。
+ */
+
 import React from 'react'
 import { Box, Text } from 'ink'
 
@@ -18,11 +27,15 @@ const ROBOT_ART = [
 const DIVIDER_LINES = Array.from({ length: 11 }, (_, i) => i)
 
 interface WelcomeScreenProps {
+  /** 当前激活的模型名，从 useChat.currentModel 传入 */
   model: string
+  /** 当前激活的 provider 名，从 useChat.currentProvider 传入 */
   provider: string
+  /** 工作目录，用于在左栏底部显示上下文路径 */
   cwd: string
 }
 
+/** 启动欢迎界面，会话开始后（有消息时）被 ChatView 替换。 */
 export function WelcomeScreen({ model, provider, cwd }: WelcomeScreenProps) {
   return (
     <Box
