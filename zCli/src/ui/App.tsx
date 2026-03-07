@@ -61,6 +61,8 @@ export function App({
   // useRef: read latest value in async callbacks without closure staleness
   // (same dual-track pattern as allowedToolsRef in useChat)
   const suggestionConsumedRef = useRef(false)
+  // suggestionIndexRef: useInput 回调内读取最新索引值（避免闭包捕获陈旧 state）
+  const suggestionIndexRef = useRef(0)
 
   const started = messages.length > 0 || isStreaming
 
@@ -99,6 +101,7 @@ export function App({
   // inputValue 变化时重置高亮索引，避免越界
   useEffect(() => {
     setSuggestionIndex(0)
+    suggestionIndexRef.current = 0  // 同步 ref，供 useInput 闭包读取
   }, [inputValue])
 
   const handleSubmit = useCallback((input: string) => {
@@ -165,17 +168,29 @@ export function App({
 
   // isActive: 仅在浮层可见时拦截按键，防止与 TextInput 的正常 Enter 冲突
   useInput((_input, key) => {
-    if (key.upArrow)   setSuggestionIndex(i => Math.max(0, i - 1))
-    if (key.downArrow) setSuggestionIndex(i => Math.min(suggestions.length - 1, i + 1))
+    if (key.upArrow) {
+      setSuggestionIndex(i => {
+        const next = Math.max(0, i - 1)
+        suggestionIndexRef.current = next  // 同步 ref
+        return next
+      })
+    }
+    if (key.downArrow) {
+      setSuggestionIndex(i => {
+        const next = Math.min(suggestions.length - 1, i + 1)
+        suggestionIndexRef.current = next  // 同步 ref
+        return next
+      })
+    }
     if (key.return) {
-      const cmd = suggestions[suggestionIndex]
+      const cmd = suggestions[suggestionIndexRef.current]  // 使用 ref 读取最新索引，避免闭包陈旧值
       if (cmd) {
         // suggestionConsumedRef 防止 InputBar.onSubmit 的重复触发：
         // TextInput 会在同一渲染周期内也触发 onSubmit，
         // handleSubmit 检测到 ref 为 true 时直接返回，避免双重执行。
         suggestionConsumedRef.current = true
         handleSubmit('/' + cmd.name)
-        setInputValue('')
+        // DO NOT call setInputValue('') here — handleSubmit already does it
       }
     }
     if (key.escape) setInputValue('')
