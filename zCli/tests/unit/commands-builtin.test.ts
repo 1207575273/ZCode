@@ -35,7 +35,8 @@ describe('HelpCommand', () => {
   it('execute() 输出包含指令描述', () => {
     const cmd = new HelpCommand(makeCommands)
     const result = cmd.execute([])
-    if (result.action?.type !== 'show_help') return
+    expect(result.action?.type).toBe('show_help')
+    if (result.action?.type !== 'show_help') throw new Error('unexpected action type')
     expect(result.action.content).toContain('Clear current conversation')
     expect(result.action.content).toContain('Switch model')
   })
@@ -43,7 +44,8 @@ describe('HelpCommand', () => {
   it('execute() 当指令有 aliases 时输出中包含别名', () => {
     const cmd = new HelpCommand(makeCommands)
     const result = cmd.execute([])
-    if (result.action?.type !== 'show_help') return
-    expect(result.action.content).toContain('m')
+    expect(result.action?.type).toBe('show_help')
+    if (result.action?.type !== 'show_help') throw new Error('unexpected action type')
+    expect(result.action.content).toContain('(m)')
   })
 })
