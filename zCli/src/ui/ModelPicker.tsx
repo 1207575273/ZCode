@@ -2,6 +2,9 @@
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 
+const MODEL_COL_WIDTH = 20
+const PROVIDER_COL_WIDTH = 12
+
 export interface ModelItem {
   provider: string
   model: string
@@ -23,14 +26,12 @@ export function ModelPicker({
   onCancel,
 }: ModelPickerProps) {
   // 初始光标定位：找到匹配当前激活模型的项，找不到则停在第一项
-  const initialIndex = () => {
+  const [selected, setSelected] = useState(() => {
     const idx = items.findIndex(
       item => item.provider === currentProvider && item.model === currentModel
     )
     return idx >= 0 ? idx : 0
-  }
-
-  const [selected, setSelected] = useState(initialIndex)
+  })
 
   useInput((_input, key) => {
     if (key.upArrow) {
@@ -49,6 +50,14 @@ export function ModelPicker({
       onCancel()
     }
   })
+
+  if (items.length === 0) {
+    return (
+      <Box flexDirection="column" paddingX={1}>
+        <Text color="yellow">暂无可用模型</Text>
+      </Box>
+    )
+  }
 
   return (
     <Box flexDirection="column" paddingX={2} paddingY={1}>
@@ -69,12 +78,12 @@ export function ModelPicker({
             <Box key={`${item.provider}:${item.model}`} paddingLeft={1}>
               {isSelected ? (
                 <Text color="cyan">
-                  {cursor} {i + 1}. {item.model.padEnd(20)} {item.provider.padEnd(12)} {priceStr}
+                  {cursor} {i + 1}. {item.model.padEnd(MODEL_COL_WIDTH)} {item.provider.padEnd(PROVIDER_COL_WIDTH)} {priceStr}
                   {isCurrent ? <Text color="green"> ✓</Text> : ''}
                 </Text>
               ) : (
                 <Text dimColor={!isCurrent}>
-                  {'  '}{i + 1}. {item.model.padEnd(20)} {item.provider.padEnd(12)} {priceStr}
+                  {'  '}{i + 1}. {item.model.padEnd(MODEL_COL_WIDTH)} {item.provider.padEnd(PROVIDER_COL_WIDTH)} {priceStr}
                   {isCurrent ? <Text color="green"> ✓</Text> : ''}
                 </Text>
               )}
