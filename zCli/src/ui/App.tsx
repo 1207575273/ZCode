@@ -107,12 +107,14 @@ export function App({
   }, [inputValue])
 
   const handleSubmit = useCallback((input: string) => {
-    setInputValue('')
-    // 建议浮层已通过 useInput 处理了 Enter，跳过 InputBar.onSubmit 的重复触发
+    // 建议浮层已通过 useInput 处理了 Enter：
+    // 此时 inputValue 已被 useInput 设为补全后的值（如 '/model '），
+    // 不能在这里清空——否则会覆盖补全结果。直接返回即可。
     if (suggestionConsumedRef.current) {
       suggestionConsumedRef.current = false
       return
     }
+    setInputValue('')
     const trimmed = input.trim()
     if (!trimmed) return
 
@@ -199,6 +201,7 @@ export function App({
       if (cmd) {
         suggestionConsumedRef.current = true
         setInputValue('/' + cmd.name + ' ')
+        setInputResetKey(k => k + 1)  // 强制 InputBar 重挂载，cursor 归位到末尾
       }
     }
     if (key.escape) {
