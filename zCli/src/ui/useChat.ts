@@ -29,9 +29,14 @@ export interface UseChatReturn {
   error: string | null
   pendingPermission: PendingPermission | null
   allowedTools: Set<string>
+  currentProvider: string
+  currentModel: string
   submit: (text: string) => void
   abort: () => void
   resolvePermission: (allow: boolean, always?: boolean) => void
+  clearMessages: () => void
+  appendSystemMessage: (text: string) => void
+  switchModel: (provider: string, model: string) => void
 }
 
 function buildRegistry(): ToolRegistry {
@@ -53,6 +58,8 @@ export function useChat(): UseChatReturn {
   const [error, setError] = useState<string | null>(null)
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null)
   const [allowedTools, setAllowedTools] = useState<Set<string>>(new Set())
+  const [currentProvider, setCurrentProvider] = useState<string>(() => configManager.load().defaultProvider ?? '')
+  const [currentModel, setCurrentModel] = useState<string>(() => configManager.load().defaultModel ?? '')
   const allowedToolsRef = useRef<Set<string>>(new Set())
   const abortRef = useRef<AbortController | null>(null)
 
@@ -77,7 +84,9 @@ export function useChat(): UseChatReturn {
     const registry = buildRegistry()
 
     const userMsg: ChatMessage = { id: randomUUID(), role: 'user', content: text }
-    const history: Message[] = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }))
+    // 过滤 system 消息，不发送给 LLM
+    const llmMessages = [...messages, userMsg].filter(m => m.role !== 'system')
+    const history: Message[] = llmMessages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
 
     setMessages(prev => [...prev, userMsg])
     setStreamingMessage('')
@@ -147,5 +156,39 @@ export function useChat(): UseChatReturn {
 
   const abort = useCallback(() => { abortRef.current?.abort() }, [])
 
-  return { messages, streamingMessage, toolEvents, isStreaming, error, pendingPermission, allowedTools, submit, abort, resolvePermission }
+  const clearMessages = useCallback((): void => {
+    setMessages([])
+  }, [])
+
+  const appendSystemMessage = useCallback((text: string): void => {
+    const msg: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'system',
+      content: text,
+    }
+    setMessages(prev => [...prev, msg])
+  }, [])
+
+  const switchModel = useCallback((provider: string, model: string): void => {
+    setCurrentProvider(provider)
+    setCurrentModel(model)
+  }, [])
+
+  return {
+    messages,
+    streamingMessage,
+    toolEvents,
+    isStreaming,
+    error,
+    pendingPermission,
+    allowedTools,
+    currentProvider,
+    currentModel,
+    submit,
+    abort,
+    resolvePermission,
+    clearMessages,
+    appendSystemMessage,
+    switchModel,
+  }
 }

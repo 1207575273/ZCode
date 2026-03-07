@@ -6,7 +6,7 @@ import { ToolStatusLine, type ToolEvent } from './ToolStatusLine.js'
 
 export interface ChatMessage {
   id: string
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'system'
   content: string
 }
 
@@ -26,10 +26,18 @@ export function ChatView({ messages, streamingMessage, toolEvents }: ChatViewPro
     <Box flexDirection="column" paddingX={1} flexGrow={1}>
       {messages.map((msg) => (
         <Box key={msg.id} marginBottom={1} flexDirection="column">
-          <Text color={ROLE_CONFIG[msg.role].color} bold>
-            {ROLE_CONFIG[msg.role].label}
-          </Text>
-          <Text>{msg.content}</Text>
+          {msg.role === 'system' ? (
+            <Box paddingLeft={1} borderStyle="single" borderLeft={true} borderColor="gray" borderRight={false} borderTop={false} borderBottom={false}>
+              <Text dimColor>{msg.content}</Text>
+            </Box>
+          ) : (
+            <>
+              <Text color={ROLE_CONFIG[msg.role].color} bold>
+                {ROLE_CONFIG[msg.role].label}
+              </Text>
+              <Text>{msg.content}</Text>
+            </>
+          )}
         </Box>
       ))}
 
