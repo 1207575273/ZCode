@@ -8,8 +8,9 @@
  * items 由外部（App.tsx）传入，组件不直接读取 config，保持关注点分离。
  */
 
-import React, { useState } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { Box, Text, useInput } from 'ink'
+import type { Key } from 'ink'
 
 /** model 列列宽（字符数），用于 padEnd 对齐显示 */
 const MODEL_COL_WIDTH = 20
@@ -54,24 +55,49 @@ export function ModelPicker({
     return idx >= 0 ? idx : 0
   })
 
-  useInput((_input, key) => {
+  // dual-track ref 模式：Ink 的 useInput 每当 inputHandler 引用变化时会重新注册监听器。
+  // 若 App.tsx 因流式输出等原因频繁重渲染，onCancel/onSelect prop 的引用每次都会变化，
+  // 导致监听器在「卸载旧→注册新」的间隙中丢失 Esc 等按键事件。
+  // 解决方案：用 ref 同步最新值，useInput 回调本身保持稳定引用（useCallback 空依赖）。
+  const onCancelRef = useRef(onCancel)
+  const onSelectRef = useRef(onSelect)
+  const itemsRef    = useRef(items)
+  const selectedRef = useRef(selected)
+
+  useEffect(() => { onCancelRef.current = onCancel }, [onCancel])
+  useEffect(() => { onSelectRef.current = onSelect  }, [onSelect])
+  useEffect(() => { itemsRef.current    = items      }, [items])
+  useEffect(() => { selectedRef.current = selected   }, [selected])
+
+  // stableHandler：依赖数组为空，Ink 永不重新注册，彻底消除按键丢失的竞态窗口
+  const stableHandler = useCallback((_input: string, key: Key) => {
     // 循环导航：到达边界时回绕到另一端
     if (key.upArrow) {
-      setSelected(s => (s - 1 + items.length) % items.length)
+      setSelected(s => {
+        const next = (s - 1 + itemsRef.current.length) % itemsRef.current.length
+        selectedRef.current = next
+        return next
+      })
     }
     if (key.downArrow) {
-      setSelected(s => (s + 1) % items.length)
+      setSelected(s => {
+        const next = (s + 1) % itemsRef.current.length
+        selectedRef.current = next
+        return next
+      })
     }
     if (key.return) {
-      const item = items[selected]
+      const item = itemsRef.current[selectedRef.current]
       if (item != null) {
-        onSelect(item.provider, item.model)
+        onSelectRef.current(item.provider, item.model)
       }
     }
     if (key.escape) {
-      onCancel()
+      onCancelRef.current()
     }
-  })
+  }, [])  // 空依赖：回调永远稳定
+
+  useInput(stableHandler)
 
   if (items.length === 0) {
     return (
