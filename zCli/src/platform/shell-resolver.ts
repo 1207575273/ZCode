@@ -43,7 +43,7 @@ export function resolveShell(preferred?: ShellType): ResolvedShell {
     return {
       type: 'powershell',
       path: 'powershell.exe',
-      args: ['-NonInteractive', '-Command'],
+      args: ['-NoProfile', '-NonInteractive', '-Command'],
     }
   }
 

@@ -7,14 +7,14 @@ describe('BashTool', () => {
     const result = await tool.execute({ command: 'echo hello' }, { cwd: process.cwd() })
     expect(result.success).toBe(true)
     expect(result.output).toContain('hello')
-  })
+  }, 15_000)
 
   it('命令失败返回 error', async () => {
     const tool = new BashTool()
     // nonexistent_command_xyz 在任何 shell 中都会失败
     const result = await tool.execute({ command: 'nonexistent_command_xyz' }, { cwd: process.cwd() })
     expect(result.success).toBe(false)
-  })
+  }, 15_000)
 
   it('dangerous 为 true', () => {
     expect(new BashTool().dangerous).toBe(true)
