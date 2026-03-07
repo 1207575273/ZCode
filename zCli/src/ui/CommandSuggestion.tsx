@@ -3,7 +3,7 @@
  *
  * 接收已过滤的建议列表与当前高亮索引，渲染为轻量浮层。
  * 无自身状态，无 useInput — 所有导航逻辑由父组件（App.tsx）的 useInput 管理。
- * 渲染位置：InputBar 正上方（由 App.tsx 布局决定）。
+ * 渲染位置：InputBar 正下方（由 App.tsx 布局决定）。
  */
 import React from 'react'
 import { Box, Text } from 'ink'

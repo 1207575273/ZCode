@@ -182,14 +182,19 @@ export function App({
         return next
       })
     }
-    if (key.tab || key.return) {
+    // Tab: 仅补全，不设 ref（Tab 不触发 onSubmit，无需防重触发）
+    if (key.tab) {
       const cmd = suggestions[suggestionIndexRef.current]
       if (cmd) {
-        // suggestionConsumedRef: 阻断 TextInput.onSubmit 在同一 tick 触发 handleSubmit，
-        // 防止将未完整输入（如 "/cl"）当作消息提交。
-        // Tab 不触发 onSubmit，但与 return 共用同一分支，置 true 无副作用。
+        setInputValue('/' + cmd.name + ' ')
+      }
+    }
+    // Enter: 补全并设 ref，阻断 TextInput.onSubmit 的同 tick 重复触发
+    if (key.return) {
+      const cmd = suggestions[suggestionIndexRef.current]
+      if (cmd) {
         suggestionConsumedRef.current = true
-        setInputValue('/' + cmd.name + ' ')  // 尾部空格，方便继续输入参数
+        setInputValue('/' + cmd.name + ' ')
       }
     }
     if (key.escape) setInputValue('')
