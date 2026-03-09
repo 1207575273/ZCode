@@ -215,17 +215,18 @@ export function ResumePanel({
   // ── Session 列表渲染 ──
   return (
     <Box flexDirection="column" paddingX={2} paddingY={1}>
-      <Text bold>Resume Session</Text>
+      <Text bold color="blue">Resume Session</Text>
+
+      {/* 搜索框：始终显示，参考 Claude Code 风格 */}
+      <Box borderStyle="round" borderColor={searchText ? 'cyan' : 'gray'} paddingX={1} marginTop={1}>
+        <Text dimColor={!searchText}>
+          {'🔍 '}{searchText || 'Search...'}
+        </Text>
+      </Box>
+
       <Text dimColor>
         {'  '}{showAll ? 'All projects' : 'Current project'} · {filtered.length} sessions
-        {' · Ctrl+A toggle scope'}
       </Text>
-
-      {searchText.length > 0 && (
-        <Box marginTop={1}>
-          <Text>Search: <Text color="cyan">{searchText}</Text></Text>
-        </Box>
-      )}
 
       <Text> </Text>
 
@@ -236,22 +237,27 @@ export function ResumePanel({
       ) : (
         filtered.map((session, index) => {
           const isSelected = index === selectedIndex
-          const prefix = isSelected ? '> ' : '  '
-          const message = session.firstMessage.length > MAX_MESSAGE_LENGTH
-            ? session.firstMessage.slice(0, MAX_MESSAGE_LENGTH) + '...'
-            : session.firstMessage
+          const prefix = isSelected ? '❯ ' : '  '
+          const message = session.firstMessage || '(session)'
+          const displayMsg = message.length > MAX_MESSAGE_LENGTH
+            ? message.slice(0, MAX_MESSAGE_LENGTH) + '...'
+            : message
           return (
-            <Box key={session.sessionId}>
-              {isSelected ? (
-                <Text color="cyan" bold>{prefix}{message}</Text>
-              ) : (
-                <Text>{prefix}{message}</Text>
-              )}
-              <Text dimColor>
-                {' · '}{timeAgo(session.updatedAt)}
-                {session.gitBranch ? ` · ${session.gitBranch}` : ''}
-                {' · '}{formatSize(session.fileSize)}
-              </Text>
+            <Box key={session.sessionId} flexDirection="column">
+              <Box>
+                {isSelected ? (
+                  <Text color="cyan" bold>{prefix}{displayMsg}</Text>
+                ) : (
+                  <Text>{prefix}{displayMsg}</Text>
+                )}
+              </Box>
+              <Box>
+                <Text dimColor>
+                  {'  '}{timeAgo(session.updatedAt)}
+                  {session.gitBranch ? ` · ${session.gitBranch}` : ''}
+                  {' · '}{formatSize(session.fileSize)}
+                </Text>
+              </Box>
             </Box>
           )
         })
@@ -259,7 +265,7 @@ export function ResumePanel({
 
       <Text> </Text>
       <Box>
-        <Text dimColor>Up/Down navigate - Enter select - Esc close - type to search</Text>
+        <Text dimColor>Type to Search · Enter to select · Ctrl+A {showAll ? 'current project' : 'all projects'} · Esc to clear</Text>
       </Box>
     </Box>
   )
