@@ -23,6 +23,7 @@ export default defineConfig({
       '@persistence': new URL('./src/persistence', import.meta.url).pathname,
       '@observability': new URL('./src/observability', import.meta.url).pathname,
       '@config': new URL('./src/config', import.meta.url).pathname,
+      '@utils': new URL('./src/utils', import.meta.url).pathname,
     },
   },
 })
