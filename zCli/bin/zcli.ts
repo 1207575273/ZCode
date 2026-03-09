@@ -34,14 +34,25 @@ function getResumeCommand(sessionId: string): string {
   return `pnpm dev -- --resume ${sessionId}`
 }
 
-function exitGracefully() {
-  unmount()
+/** 打印 resume 提示（幂等，只打印一次） */
+let resumeHintPrinted = false
+function printResumeHint(): void {
+  if (resumeHintPrinted) return
+  resumeHintPrinted = true
   const sessionId = getCurrentSessionId()
   if (sessionId) {
     const cmd = getResumeCommand(sessionId)
-    console.log(`\nResume this session with:\n  ${cmd}\n`)
+    // 使用 process.stdout.write 确保同步写入（exit handler 中 console.log 可能丢失）
+    process.stdout.write(`\nResume this session with:\n  ${cmd}\n\n`)
   }
+}
+
+function exitGracefully() {
+  unmount()
+  printResumeHint()
   process.exit(0)
 }
 
 process.on('SIGINT', exitGracefully)
+// 兜底：无论以何种方式退出（Ink 内部 exit、process.exit 等），都打印 resume 提示
+process.on('exit', printResumeHint)
