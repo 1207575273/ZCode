@@ -10,7 +10,7 @@ import {
   existsSync,
 } from 'node:fs'
 import { join, basename } from 'node:path'
-import type { SessionEvent, SessionSnapshot, SessionSummary } from './session-types.js'
+import type { SessionEvent, SessionSnapshot, SessionSummary, BranchInfo } from './session-types.js'
 import {
   toProjectSlug,
   generateSessionId,
@@ -72,8 +72,8 @@ export class SessionStore {
     appendFileSync(filePath, JSON.stringify(event) + '\n', 'utf-8')
   }
 
-  /** Read JSONL, extract user/assistant text messages, return snapshot */
-  loadMessages(sessionId: string): SessionSnapshot {
+  /** Read JSONL, extract user/assistant text messages along a branch path, return snapshot */
+  loadMessages(sessionId: string, leafEventUuid?: string): SessionSnapshot {
     const filePath = this.#resolveFilePath(sessionId)
     if (!filePath) {
       throw new Error(`Session not found: ${sessionId}`)
@@ -81,23 +81,34 @@ export class SessionStore {
 
     const content = readFileSync(filePath, 'utf-8')
     const lines = content.trim().split('\n').filter(Boolean)
+    const allEvents: SessionEvent[] = lines.map(l => JSON.parse(l) as SessionEvent)
+
+    // Determine the leaf to trace from
+    let targetLeafUuid = leafEventUuid
+    if (!targetLeafUuid) {
+      const latestLeaf = this.#findLatestLeaf(allEvents)
+      if (!latestLeaf) {
+        // Fallback: empty session
+        return { sessionId, provider: '', model: '', cwd: '', messages: [], leafEventUuid: null }
+      }
+      targetLeafUuid = latestLeaf.uuid
+    }
+
+    // Walk the tree from leaf to root
+    const path = this.#buildEventPath(allEvents, targetLeafUuid)
 
     let provider = ''
     let model = ''
     let cwd = ''
     const messages: SessionSnapshot['messages'] = []
 
-    for (const line of lines) {
-      const event = JSON.parse(line) as SessionEvent
-
-      // Extract provider/model from session_start or session_resume (last one wins)
+    for (const event of path) {
       if (event.type === 'session_start' || event.type === 'session_resume') {
         if (event.provider) provider = event.provider
         if (event.model) model = event.model
         if (event.cwd) cwd = event.cwd
       }
 
-      // Only extract user/assistant events with string content
       if (
         (event.type === 'user' || event.type === 'assistant') &&
         event.message &&
@@ -111,7 +122,74 @@ export class SessionStore {
       }
     }
 
-    return { sessionId, provider, model, cwd, messages }
+    return { sessionId, provider, model, cwd, messages, leafEventUuid: targetLeafUuid }
+  }
+
+  /** List all branches in a session (each leaf event = one branch) */
+  listBranches(sessionId: string): BranchInfo[] {
+    const filePath = this.#resolveFilePath(sessionId)
+    if (!filePath) throw new Error(`Session not found: ${sessionId}`)
+
+    const content = readFileSync(filePath, 'utf-8')
+    const lines = content.trim().split('\n').filter(Boolean)
+    const events: SessionEvent[] = lines.map(l => JSON.parse(l) as SessionEvent)
+
+    // Build parent→children and uuid→event maps
+    const childrenOf = new Set<string>() // set of all parentUuids that have children
+
+    for (const ev of events) {
+      if (ev.parentUuid) childrenOf.add(ev.parentUuid)
+    }
+
+    // Leaf events: events whose uuid is NOT in childrenOf
+    const leaves = events.filter(ev => !childrenOf.has(ev.uuid))
+
+    // Count children for each event (used to find fork points)
+    const childCount = new Map<string, number>()
+    for (const ev of events) {
+      if (ev.parentUuid) {
+        childCount.set(ev.parentUuid, (childCount.get(ev.parentUuid) ?? 0) + 1)
+      }
+    }
+
+    // For each leaf, walk up to find branch info
+    const branches: BranchInfo[] = leaves.map(leaf => {
+      const path = this.#buildEventPath(events, leaf.uuid)
+
+      // Count user+assistant messages
+      const msgs = path.filter(e =>
+        (e.type === 'user' || e.type === 'assistant') &&
+        e.message && typeof e.message.content === 'string'
+      )
+
+      const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1]! : null
+      const lastMessageText = lastMsg?.message?.content
+      const lastMessage = typeof lastMessageText === 'string'
+        ? (lastMessageText.length > 80 ? lastMessageText.slice(0, 80) + '...' : lastMessageText)
+        : ''
+
+      // Find fork point: the deepest event in the path that has multiple children
+      let forkPoint: string | null = null
+      for (let i = path.length - 1; i >= 0; i--) {
+        if ((childCount.get(path[i]!.uuid) ?? 0) > 1) {
+          forkPoint = path[i]!.uuid
+          break
+        }
+      }
+
+      return {
+        leafEventUuid: leaf.uuid,
+        lastMessage,
+        messageCount: msgs.length,
+        updatedAt: leaf.timestamp,
+        forkPoint,
+      }
+    })
+
+    // Sort by updatedAt descending
+    branches.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+
+    return branches
   }
 
   /** List sessions, optionally filtered by projectSlug, sorted by updatedAt desc */
@@ -201,6 +279,35 @@ export class SessionStore {
         // Ignore
       }
     }
+  }
+
+  /** Walk from leafUuid up to root via parentUuid, return chronological path */
+  #buildEventPath(events: SessionEvent[], leafUuid: string): SessionEvent[] {
+    const eventMap = new Map<string, SessionEvent>()
+    for (const ev of events) eventMap.set(ev.uuid, ev)
+
+    const path: SessionEvent[] = []
+    let current: SessionEvent | undefined = eventMap.get(leafUuid)
+    while (current) {
+      path.push(current)
+      current = current.parentUuid ? eventMap.get(current.parentUuid) : undefined
+    }
+    path.reverse()
+    return path
+  }
+
+  /** Find the latest leaf event (event with no children) */
+  #findLatestLeaf(events: SessionEvent[]): SessionEvent | undefined {
+    const hasChildren = new Set<string>()
+    for (const ev of events) {
+      if (ev.parentUuid) hasChildren.add(ev.parentUuid)
+    }
+    const leaves = events.filter(ev => !hasChildren.has(ev.uuid))
+    if (leaves.length === 0) return undefined
+    // Pick the one with the latest timestamp
+    return leaves.reduce((latest, ev) =>
+      ev.timestamp > latest.timestamp ? ev : latest
+    )
   }
 
   /** Extract firstMessage, updatedAt, gitBranch from JSONL content */

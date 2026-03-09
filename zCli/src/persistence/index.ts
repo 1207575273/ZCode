@@ -5,7 +5,7 @@ import { homedir } from 'node:os'
 import { SessionStore } from './session-store.js'
 
 export { SessionStore } from './session-store.js'
-export type { SessionEvent, SessionSnapshot, SessionSummary } from './session-types.js'
+export type { SessionEvent, SessionSnapshot, SessionSummary, BranchInfo } from './session-types.js'
 export type { SessionEventType } from './session-types.js'
 export {
   toProjectSlug,

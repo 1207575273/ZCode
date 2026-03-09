@@ -43,6 +43,22 @@ export interface SessionSnapshot {
   model: string
   cwd: string
   messages: Array<{ id: string; role: 'user' | 'assistant'; content: string }>
+  /** 当前分支的叶节点 UUID */
+  leafEventUuid: string | null
+}
+
+/** 分支信息，每个叶节点代表一个分支 */
+export interface BranchInfo {
+  /** 分支末端事件 UUID */
+  leafEventUuid: string
+  /** 分支末尾消息预览（截断） */
+  lastMessage: string
+  /** 该分支上 user+assistant 消息数 */
+  messageCount: number
+  /** 叶节点时间戳 */
+  updatedAt: string
+  /** 分叉点事件 UUID（与主干分开的位置，主干无分叉点） */
+  forkPoint: string | null
 }
 
 export interface SessionSummary {
