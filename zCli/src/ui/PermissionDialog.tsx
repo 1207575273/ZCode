@@ -12,9 +12,12 @@
  *   3. No                       — 拒绝，工具调用返回 error
  */
 
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
+import { resolve } from 'node:path'
 import { useTerminalSize } from './useTerminalSize.js'
+import { DiffView } from './DiffView.js'
+import { computeEditDiff, computeWriteDiff } from '@utils/compute-diff.js'
 
 interface PermissionDialogProps {
   /** 工具名称，用于显示标题和生成参数预览 */
@@ -74,7 +77,20 @@ export function PermissionDialog({ toolName, args, onResolve }: PermissionDialog
     if (key.escape) onResolve(false, false)
   })
 
-  const title = TOOL_TITLES[toolName] ?? toolName
+  const diffData = useMemo(() => {
+    const rawPath = String(args['path'] ?? '')
+    const filePath = resolve(process.cwd(), rawPath)
+
+    if (toolName === 'edit_file') {
+      return computeEditDiff(filePath, String(args['old_str'] ?? ''), String(args['new_str'] ?? ''))
+    }
+    if (toolName === 'write_file') {
+      return computeWriteDiff(filePath, String(args['content'] ?? ''))
+    }
+    return null
+  }, [toolName, args])
+
+  const title = diffData?.isNewFile ? 'Create file' : (TOOL_TITLES[toolName] ?? toolName)
   const preview = formatPreview(toolName, args)
 
   return (
@@ -84,9 +100,15 @@ export function PermissionDialog({ toolName, args, onResolve }: PermissionDialog
       </Box>
       <Box paddingX={2} flexDirection="column">
         <Text bold color="yellow">{title}</Text>
-        <Box marginY={1} paddingLeft={2}>
-          <Text dimColor>{preview}</Text>
-        </Box>
+        {diffData !== null ? (
+          <Box marginY={1} paddingLeft={2}>
+            <DiffView {...diffData} />
+          </Box>
+        ) : (
+          <Box marginY={1} paddingLeft={2}>
+            <Text dimColor>{preview}</Text>
+          </Box>
+        )}
         <Text>Do you want to proceed?</Text>
         {OPTIONS.map((opt, i) => (
           <Box key={opt.value} paddingLeft={1}>
