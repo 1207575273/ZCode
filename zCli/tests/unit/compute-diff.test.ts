@@ -20,12 +20,12 @@ afterEach(() => {
 })
 
 describe('computeEditDiff', () => {
-  it('should produce hunks when replacing string in a real temp file', async () => {
+  it('should produce hunks when replacing string in a real temp file', () => {
     const filePath = tmpFile('edit-basic.txt')
     const original = 'line1\nline2\nline3\nline4\n'
     writeFileSync(filePath, original, 'utf-8')
 
-    const result = await computeEditDiff(filePath, 'line2', 'modified')
+    const result = computeEditDiff(filePath, 'line2', 'modified')
 
     expect(result.filePath).toBe(filePath)
     expect(result.isNewFile).toBe(false)
@@ -42,10 +42,10 @@ describe('computeEditDiff', () => {
     expect(hasAddition).toBe(true)
   })
 
-  it('should return error when file not found', async () => {
+  it('should return error when file not found', () => {
     const filePath = tmpFile('nonexistent.txt')
 
-    const result = await computeEditDiff(filePath, 'old', 'new')
+    const result = computeEditDiff(filePath, 'old', 'new')
 
     expect(result.filePath).toBe(filePath)
     expect(result.error).toBeDefined()
@@ -56,11 +56,11 @@ describe('computeEditDiff', () => {
 })
 
 describe('computeWriteDiff', () => {
-  it('should show full add when file is new (does not exist)', async () => {
+  it('should show full add when file is new (does not exist)', () => {
     const filePath = tmpFile('new-file.txt')
     const content = 'hello\nworld\n'
 
-    const result = await computeWriteDiff(filePath, content)
+    const result = computeWriteDiff(filePath, content)
 
     expect(result.filePath).toBe(filePath)
     expect(result.isNewFile).toBe(true)
@@ -70,11 +70,11 @@ describe('computeWriteDiff', () => {
     expect(result.deletions).toBe(0)
   })
 
-  it('should show diff when overwriting existing file', async () => {
+  it('should show diff when overwriting existing file', () => {
     const filePath = tmpFile('overwrite.txt')
     writeFileSync(filePath, 'old content\n', 'utf-8')
 
-    const result = await computeWriteDiff(filePath, 'new content\n')
+    const result = computeWriteDiff(filePath, 'new content\n')
 
     expect(result.filePath).toBe(filePath)
     expect(result.isNewFile).toBe(false)
@@ -84,12 +84,12 @@ describe('computeWriteDiff', () => {
     expect(result.deletions).toBeGreaterThan(0)
   })
 
-  it('should truncate new file over 20 lines and set truncatedLines', async () => {
+  it('should truncate new file over 20 lines and set truncatedLines', () => {
     const filePath = tmpFile('long-new-file.txt')
     const lines = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`)
     const content = lines.join('\n') + '\n'
 
-    const result = await computeWriteDiff(filePath, content)
+    const result = computeWriteDiff(filePath, content)
 
     expect(result.filePath).toBe(filePath)
     expect(result.isNewFile).toBe(true)
