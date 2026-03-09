@@ -24,7 +24,7 @@ export function ForkPanel({ messages, onFork, onClose }: ForkPanelProps) {
   const [selectedIndex, setSelectedIndex] = useState(forkableMessages.length - 1)
 
   const handler = useCallback((input: string, key: Key) => {
-    if (key.escape) {
+    if (key.escape || input === 'q') {
       onClose()
       return
     }
