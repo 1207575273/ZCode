@@ -53,6 +53,14 @@ function formatPreview(toolName: string, args: Record<string, unknown>): string 
   if (toolName === 'bash') return String(args['command'] ?? '')
   if (toolName === 'write_file') return `${args['path']} (${String(args['content'] ?? '').length} chars)`
   if (toolName === 'edit_file') return String(args['path'] ?? '')
+  // MCP 工具：显示 server + tool + 参数
+  if (toolName.startsWith('mcp__')) {
+    const parts = toolName.split('__')
+    const server = parts[1] ?? ''
+    const tool = parts[2] ?? ''
+    const argsStr = Object.keys(args).length > 0 ? JSON.stringify(args, null, 2) : ''
+    return `[${server}] ${tool}${argsStr ? '\n' + argsStr : ''}`
+  }
   return JSON.stringify(args)
 }
 
@@ -90,7 +98,9 @@ export function PermissionDialog({ toolName, args, onResolve }: PermissionDialog
     return null
   }, [toolName, args])
 
-  const title = diffData?.isNewFile ? 'Create file' : (TOOL_TITLES[toolName] ?? toolName)
+  const title = toolName.startsWith('mcp__')
+    ? `MCP: ${toolName.split('__')[2] ?? toolName}`
+    : (diffData?.isNewFile ? 'Create file' : (TOOL_TITLES[toolName] ?? toolName))
   const preview = formatPreview(toolName, args)
 
   return (

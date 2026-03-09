@@ -25,6 +25,8 @@ import { BashTool } from '@tools/bash.js'
 import type { ChatMessage } from './ChatView.js'
 import type { Message } from '@core/types.js'
 import type { ToolEvent } from './ToolStatusLine.js'
+import { loadMcpConfig } from '@config/mcp-config.js'
+import { McpManager } from '@mcp/mcp-manager.js'
 
 /** 待用户确认的权限请求，暂停 AgentLoop 直到 resolve 被调用 */
 interface PendingPermission {
@@ -63,6 +65,31 @@ export interface UseChatReturn {
   appendSystemMessage: (text: string) => void
   /** 切换 provider 和 model（session 级，不写回 config.json） */
   switchModel: (provider: string, model: string) => void
+}
+
+let mcpManager: McpManager | null = null
+let mcpInitialized = false
+
+async function ensureMcpConnected(registry: ToolRegistry): Promise<void> {
+  if (mcpInitialized) {
+    // Already initialized — just register existing tools
+    if (mcpManager != null) {
+      for (const tool of mcpManager.getTools()) {
+        registry.register(tool)
+      }
+    }
+    return
+  }
+  mcpInitialized = true
+
+  const config = loadMcpConfig()
+  if (Object.keys(config.mcpServers).length === 0) return
+
+  mcpManager = new McpManager(config)
+  await mcpManager.connectAll()
+  for (const tool of mcpManager.getTools()) {
+    registry.register(tool)
+  }
 }
 
 /** 构建包含全部内置工具的 ToolRegistry */
@@ -156,6 +183,7 @@ export function useChat(): UseChatReturn {
     ;(async () => {
       let accumulated = ''
       try {
+        await ensureMcpConnected(registry)
         for await (const event of loop.run(history)) {
           if (event.type === 'text') {
             accumulated += event.text
