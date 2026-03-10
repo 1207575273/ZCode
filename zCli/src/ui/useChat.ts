@@ -208,7 +208,16 @@ export function useChat(): UseChatReturn {
           sessionLogger.logAssistantMessage(accumulated, currentModel)
         }
       } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
+        if ((err as Error).name === 'AbortError') {
+          // 用户中断：保存已累积的部分回复
+          if (accumulated) {
+            const partialMsg: ChatMessage = { id: randomUUID(), role: 'assistant', content: accumulated }
+            setMessages(prev => [...prev, partialMsg])
+            sessionLogger.logAssistantMessage(accumulated, currentModel)
+          }
+          // 按 Claude Code 模式记录中断消息
+          sessionLogger.logUserMessage('[Request interrupted by user]')
+        } else {
           setError(err instanceof Error ? err.message : String(err))
         }
       } finally {
