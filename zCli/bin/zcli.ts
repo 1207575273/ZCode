@@ -1,63 +1,141 @@
 // bin/zcli.ts
-import React from 'react'
-import { render } from 'ink'
-import { App } from '../src/ui/App.js'
-import { getCurrentSessionId, sessionLogger } from '../src/ui/useChat.js'
-import { closeDb } from '../src/persistence/index.js'
 
-// Simple argument parsing (no external deps)
-const args = process.argv.slice(2)
-const resumeIndex = args.indexOf('--resume')
-let resumeSessionId: string | undefined
-let showResumeOnStart = false
+/**
+ * ZCli 入口 — 根据参数判断运行模式：
+ *
+ * 1. 非交互模式（Pipe Mode）：有 prompt 时直接执行，纯文本输出，执行完退出
+ *    - zcli "问题"
+ *    - zcli -p "问题"
+ *    - cat file | zcli "分析一下"
+ *
+ * 2. 交互模式（REPL）：无 prompt 时启动 Ink 界面
+ *    - zcli
+ *    - zcli --resume
+ *    - zcli --resume <sessionId>
+ */
 
-if (resumeIndex !== -1) {
-  const nextArg = args[resumeIndex + 1]
-  if (nextArg && !nextArg.startsWith('--')) {
-    resumeSessionId = nextArg
-  } else {
-    showResumeOnStart = true
+import { runPipe, readStdin } from '../src/core/pipe-runner.js'
+
+// ═══ 参数解析（无外部依赖） ═══
+
+interface CliArgs {
+  prompt: string | null
+  model: string | null
+  provider: string | null
+  resumeSessionId: string | undefined
+  showResumeOnStart: boolean
+  yes: boolean
+  noTools: boolean
+  json: boolean
+}
+
+function parseArgs(argv: string[]): CliArgs {
+  const result: CliArgs = {
+    prompt: null, model: null, provider: null,
+    resumeSessionId: undefined, showResumeOnStart: false,
+    yes: false, noTools: false, json: false,
   }
-}
 
-const { unmount } = render(
-  React.createElement(App, { resumeSessionId, showResumeOnStart })
-)
-
-/** 检测启动方式，生成对应的 resume 命令 */
-function getResumeCommand(sessionId: string): string {
-  // 通过 `zcli` 全局命令启动时，argv[1] 是 dist/bin/zcli.js
-  const entry = process.argv[1] ?? ''
-  if (entry.endsWith('zcli.js') || entry.endsWith('zcli')) {
-    return `zcli --resume ${sessionId}`
+  const positional: string[] = []
+  let i = 0
+  while (i < argv.length) {
+    const arg = argv[i]!
+    if (arg === '-p' || arg === '--prompt') {
+      result.prompt = argv[++i] ?? ''
+    } else if (arg === '-m' || arg === '--model') {
+      result.model = argv[++i] ?? ''
+    } else if (arg === '--provider') {
+      result.provider = argv[++i] ?? ''
+    } else if (arg === '--resume') {
+      const next = argv[i + 1]
+      if (next && !next.startsWith('-')) {
+        result.resumeSessionId = next
+        i++
+      } else {
+        result.showResumeOnStart = true
+      }
+    } else if (arg === '--yes' || arg === '-y') {
+      result.yes = true
+    } else if (arg === '--no-tools') {
+      result.noTools = true
+    } else if (arg === '--json') {
+      result.json = true
+    } else if (!arg.startsWith('-')) {
+      positional.push(arg)
+    }
+    i++
   }
-  // 开发模式 (tsx bin/zcli.ts)
-  return `pnpm dev -- --resume ${sessionId}`
-}
 
-/** 打印 resume 提示（幂等，只打印一次） */
-let resumeHintPrinted = false
-function printResumeHint(): void {
-  if (resumeHintPrinted) return
-  resumeHintPrinted = true
-  const sessionId = getCurrentSessionId()
-  if (sessionId) {
-    const cmd = getResumeCommand(sessionId)
-    // 使用 process.stdout.write 确保同步写入（exit handler 中 console.log 可能丢失）
-    process.stdout.write(`\nResume this session with:\n  ${cmd}\n\n`)
+  // 位置参数作为 prompt（-p 优先）
+  if (result.prompt == null && positional.length > 0) {
+    result.prompt = positional.join(' ')
   }
+
+  return result
 }
 
-function exitGracefully() {
-  // F9: 写入 session_end 汇总事件
-  sessionLogger.finalize()
-  // F10: 关闭 SQLite 连接
-  closeDb()
-  unmount()
-  printResumeHint()
-  process.exit(0)
-}
+const args = parseArgs(process.argv.slice(2))
 
-process.on('SIGINT', exitGracefully)
-// 兜底：无论以何种方式退出（Ink 内部 exit、process.exit 等），都打印 resume 提示
-process.on('exit', printResumeHint)
+// ═══ 模式判断 ═══
+
+if (args.prompt != null) {
+  // 非交互模式：有 prompt → 直接执行
+  const stdinContent = await readStdin()
+  await runPipe({
+    prompt: args.prompt,
+    stdinContent: stdinContent || undefined,
+    model: args.model ?? undefined,
+    provider: args.provider ?? undefined,
+    yes: args.yes,
+    noTools: args.noTools,
+    json: args.json,
+  })
+} else {
+  // 交互模式：启动 Ink REPL
+  const React = await import('react')
+  const { render } = await import('ink')
+  const { App } = await import('../src/ui/App.js')
+  const { getCurrentSessionId, sessionLogger } = await import('../src/ui/useChat.js')
+  const { closeDb } = await import('../src/persistence/index.js')
+
+  const { unmount } = render(
+    React.createElement(App, {
+      ...(args.resumeSessionId != null ? { resumeSessionId: args.resumeSessionId } : {}),
+      ...(args.showResumeOnStart ? { showResumeOnStart: true } : {}),
+      ...(args.model != null ? { model: args.model } : {}),
+      ...(args.provider != null ? { provider: args.provider } : {}),
+    })
+  )
+
+  /** 检测启动方式，生成对应的 resume 命令 */
+  function getResumeCommand(sessionId: string): string {
+    const entry = process.argv[1] ?? ''
+    if (entry.endsWith('zcli.js') || entry.endsWith('zcli')) {
+      return `zcli --resume ${sessionId}`
+    }
+    return `pnpm dev -- --resume ${sessionId}`
+  }
+
+  /** 打印 resume 提示（幂等，只打印一次） */
+  let resumeHintPrinted = false
+  function printResumeHint(): void {
+    if (resumeHintPrinted) return
+    resumeHintPrinted = true
+    const sessionId = getCurrentSessionId()
+    if (sessionId) {
+      const cmd = getResumeCommand(sessionId)
+      process.stdout.write(`\nResume this session with:\n  ${cmd}\n\n`)
+    }
+  }
+
+  function exitGracefully() {
+    sessionLogger.finalize()
+    closeDb()
+    unmount()
+    printResumeHint()
+    process.exit(0)
+  }
+
+  process.on('SIGINT', exitGracefully)
+  process.on('exit', printResumeHint)
+}

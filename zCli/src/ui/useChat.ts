@@ -16,21 +16,18 @@ import { randomUUID } from 'node:crypto'
 import { configManager } from '@config/config-manager.js'
 import { createProvider } from '@providers/registry.js'
 import { AgentLoop } from '@core/agent-loop.js'
-import { ToolRegistry } from '@tools/registry.js'
-import { ReadFileTool } from '@tools/read-file.js'
-import { WriteFileTool } from '@tools/write-file.js'
-import { EditFileTool } from '@tools/edit-file.js'
-import { GlobTool } from '@tools/glob.js'
-import { GrepTool } from '@tools/grep.js'
-import { BashTool } from '@tools/bash.js'
+import {
+  sessionLogger, tokenMeter, getCurrentSessionId,
+  buildRegistry, ensureMcpInitialized, registerMcpTools, getMcpStatus,
+} from '@core/bootstrap.js'
 import type { ChatMessage } from './ChatView.js'
 import type { Message } from '@core/types.js'
 import type { ToolEvent } from './ToolStatusLine.js'
-import { loadMcpConfigWithSources } from '@config/mcp-config.js'
-import { McpManager } from '@mcp/mcp-manager.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
-import { SessionLogger, TokenMeter } from '@observability/index.js'
 import { sessionStore, generateEventId } from '@persistence/index.js'
+
+// 从 bootstrap 重导出，供 bin/zcli.ts 和 App.tsx 使用
+export { sessionLogger, tokenMeter, getCurrentSessionId }
 
 /** 待用户确认的权限请求，暂停 AgentLoop 直到 resolve 被调用 */
 interface PendingPermission {
@@ -77,54 +74,6 @@ export interface UseChatReturn {
   forkFromEvent: (messageId: string) => void
 }
 
-let mcpManager: McpManager | null = null
-let mcpInitialized = false
-
-/** 模块级 SessionLogger 实例，管理会话持久化和观测事件 */
-export const sessionLogger = new SessionLogger()
-
-/** 模块级 TokenMeter 实例，管理 token 计量和计费 */
-export const tokenMeter = new TokenMeter()
-
-/** 获取当前活跃的 sessionId（退出时用于打印 resume 命令） */
-export function getCurrentSessionId(): string | null {
-  return sessionLogger.sessionId
-}
-
-/** 确保 MCP Server 已初始化连接（幂等，只连接一次） */
-async function ensureMcpInitialized(): Promise<void> {
-  if (mcpInitialized) return
-  mcpInitialized = true
-
-  const config = loadMcpConfigWithSources()
-  if (Object.keys(config.mcpServers).length === 0) return
-
-  mcpManager = new McpManager(config)
-  // F9: MCP 连接事件 → SessionLogger
-  mcpManager.onConnect = (event) => sessionLogger.logMcpConnect(event)
-  await mcpManager.connectAll()
-}
-
-/** 将 MCP 工具注册到 ToolRegistry（需先调用 ensureMcpInitialized） */
-function registerMcpTools(registry: ToolRegistry): void {
-  if (mcpManager != null) {
-    for (const tool of mcpManager.getTools()) {
-      registry.register(tool)
-    }
-  }
-}
-
-/** 构建包含全部内置工具的 ToolRegistry */
-function buildRegistry(): ToolRegistry {
-  const reg = new ToolRegistry()
-  reg.register(new ReadFileTool())
-  reg.register(new WriteFileTool())
-  reg.register(new EditFileTool())
-  reg.register(new GlobTool())
-  reg.register(new GrepTool())
-  reg.register(new BashTool())
-  return reg
-}
 
 /**
  * 核心对话 hook。
@@ -294,9 +243,7 @@ export function useChat(): UseChatReturn {
 
   /** 初始化 MCP 并返回所有 Server 状态（/mcp 指令用，会主动触发连接） */
   const getMcpInfo = useCallback(async (): Promise<ServerInfo[]> => {
-    await ensureMcpInitialized()
-    if (mcpManager == null) return []
-    return mcpManager.getStatus()
+    return getMcpStatus()
   }, [])
 
   /** 加载历史 session，恢复消息列表和 provider/model，可指定分支叶节点 */
