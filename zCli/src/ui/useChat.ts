@@ -54,6 +54,8 @@ export interface UseChatReturn {
   submit: (text: string) => void
   /** 中止当前流式请求 */
   abort: () => void
+  /** 中断当前流式请求并发送新消息 */
+  interruptAndSubmit: (text: string) => void
   /**
    * 解决权限确认。
    * @param allow  是否允许工具执行
@@ -220,6 +222,12 @@ export function useChat(): UseChatReturn {
   /** 中止当前 AgentLoop 请求（用户主动取消或超时） */
   const abort = useCallback(() => { abortRef.current?.abort() }, [])
 
+  /** 中断当前流并提交新消息 */
+  const interruptAndSubmit = useCallback((text: string) => {
+    abortRef.current?.abort()
+    setTimeout(() => submit(text), 0)
+  }, [submit])
+
   /** 清空消息列表（/clear 指令） */
   const clearMessages = useCallback((): void => {
     setMessages([])
@@ -342,6 +350,7 @@ export function useChat(): UseChatReturn {
     currentModel,
     submit,
     abort,
+    interruptAndSubmit,
     resolvePermission,
     clearMessages,
     appendSystemMessage,

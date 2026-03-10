@@ -20,9 +20,11 @@ interface InputBarProps {
   onChange: (value: string) => void
   /** 提交回调，用户按 Enter 时触发 */
   onSubmit: (value: string) => void
+  /** streaming 期间的提交回调：先中断当前流再发送 */
+  onInterruptSubmit?: ((value: string) => void) | undefined
   placeholder?: string
-  /** 为 true 时输入框变暗，提交被忽略（LLM 响应中） */
-  disabled?: boolean
+  /** 为 true 时提示符变暗，但仍允许输入和提交（可打断） */
+  streaming?: boolean
 }
 
 /**
@@ -33,16 +35,20 @@ export function InputBar({
   value,
   onChange,
   onSubmit,
+  onInterruptSubmit,
   placeholder = 'Try "how does <filepath> work?"',
-  disabled = false,
+  streaming = false,
 }: InputBarProps) {
   const { columns } = useTerminalSize()
 
   function handleSubmit(text: string) {
-    if (disabled) return
     const trimmed = text.trim()
     if (!trimmed) return
-    onSubmit(trimmed)
+    if (streaming && onInterruptSubmit) {
+      onInterruptSubmit(trimmed)
+    } else {
+      onSubmit(trimmed)
+    }
   }
 
   return (
@@ -51,7 +57,7 @@ export function InputBar({
         <Text dimColor>{'─'.repeat(columns)}</Text>
       </Box>
       <Box paddingLeft={1}>
-        {disabled
+        {streaming
           ? <Text dimColor>❯ </Text>
           : <Text color="green">❯ </Text>
         }

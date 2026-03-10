@@ -61,7 +61,8 @@ export function App({
     isStreaming,
     error,
     submit,
-    abort: _abort,
+    abort,
+    interruptAndSubmit,
     pendingPermission,
     resolvePermission,
     currentProvider,
@@ -389,6 +390,14 @@ export function App({
   }, [])
   useInput(handleModelPickerKey, { isActive: showModelPicker })
 
+  // Streaming 期间：Escape 或 Ctrl+C 中断当前响应
+  useInput((input, key) => {
+    if (key.escape || (input === 'c' && key.ctrl)) {
+      abort()
+      appendSystemMessage('⏹ 已中断响应')
+    }
+  }, { isActive: isStreaming && pendingPermission == null })
+
   return (
     <Box flexDirection="column" width="100%">
       {started ? (
@@ -468,12 +477,21 @@ export function App({
               </Box>
             )
           })()}
+          {isStreaming && (
+            <Box paddingX={1}>
+              <Text dimColor>Esc to interrupt</Text>
+            </Box>
+          )}
           <InputBar
             key={inputResetKey}
             value={inputValue}
             onChange={setInputValue}
             onSubmit={handleSubmit}
-            disabled={isStreaming}
+            onInterruptSubmit={(text) => {
+              setInputValue('')
+              interruptAndSubmit(text)
+            }}
+            streaming={isStreaming}
           />
         </>
       )}
