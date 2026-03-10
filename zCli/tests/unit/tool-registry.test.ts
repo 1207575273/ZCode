@@ -43,6 +43,13 @@ describe('ToolRegistry', () => {
     expect(result.error).toContain('unknown')
   })
 
+  it('has 返回工具是否已注册', () => {
+    const reg = new ToolRegistry()
+    reg.register(mockTool('read_file'))
+    expect(reg.has('read_file')).toBe(true)
+    expect(reg.has('nonexistent')).toBe(false)
+  })
+
   it('toToolDefinitions 返回正确的 schema 格式', () => {
     const reg = new ToolRegistry()
     reg.register(mockTool('read_file'))

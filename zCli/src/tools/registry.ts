@@ -13,6 +13,10 @@ export class ToolRegistry {
     return Array.from(this.#tools.values())
   }
 
+  has(name: string): boolean {
+    return this.#tools.has(name)
+  }
+
   isDangerous(name: string): boolean {
     return this.#tools.get(name)?.dangerous === true
   }

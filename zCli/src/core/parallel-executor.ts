@@ -59,11 +59,8 @@ export function classifyToolCalls(
   const safe: ToolCallContent[] = []
   const dangerous: ToolCallContent[] = []
 
-  const registeredNames = new Set(registry.getAll().map(t => t.name))
-
   for (const tc of toolCalls) {
-    const exists = registeredNames.has(tc.toolName)
-    if (!exists || registry.isDangerous(tc.toolName)) {
+    if (!registry.has(tc.toolName) || registry.isDangerous(tc.toolName)) {
       dangerous.push(tc)
     } else {
       safe.push(tc)
