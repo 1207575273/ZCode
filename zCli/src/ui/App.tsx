@@ -18,11 +18,13 @@ import { ModelCommand } from '@commands/model.js'
 import { McpCommand } from '@commands/mcp.js'
 import { ResumeCommand } from '@commands/resume.js'
 import { ForkCommand } from '@commands/fork.js'
+import { UsageCommand } from '@commands/usage.js'
 import { McpStatusView } from './McpStatusView.js'
 import { ResumePanel } from './ResumePanel.js'
 import { ForkPanel } from './ForkPanel.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
 import { sessionStore, toProjectSlug } from '@persistence/index.js'
+import { tokenMeter } from './useChat.js'
 
 /**
  * App — ZCli 根组件
@@ -143,6 +145,7 @@ export function App({
     reg.register(new McpCommand())
     reg.register(new ResumeCommand())
     reg.register(new ForkCommand())
+    reg.register(new UsageCommand())
     return reg
   }, [currentProvider, currentModel])
 
@@ -225,6 +228,24 @@ export function App({
             } else {
               appendSystemMessage(`未找到模型: ${action.model}`)
             }
+            return
+          }
+          case 'show_usage': {
+            const session = tokenMeter.getSessionStats()
+            const today = tokenMeter.getTodayStats()
+            const month = tokenMeter.getMonthStats()
+
+            const fmt = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n)
+            const fmtCost = (n: number) => n > 0 ? '$' + n.toFixed(4) : '--'
+
+            const text = [
+              '── Token Usage ──',
+              '',
+              `本次会话:  ${fmt(session.totalInputTokens)} in / ${fmt(session.totalOutputTokens)} out | ${fmtCost(session.totalCost)} (${session.callCount} calls)`,
+              `今日汇总:  ${fmt(today.totalInputTokens)} in / ${fmt(today.totalOutputTokens)} out | ${fmtCost(today.totalCost)} (${today.callCount} calls)`,
+              `本月汇总:  ${fmt(month.totalInputTokens)} in / ${fmt(month.totalOutputTokens)} out | ${fmtCost(month.totalCost)} (${month.callCount} calls)`,
+            ].join('\n')
+            appendSystemMessage(text)
             return
           }
           case 'show_resume_panel':
@@ -373,13 +394,26 @@ export function App({
           onClose={() => setShowForkPanel(false)}
         />
       ) : (
-        <InputBar
-          key={inputResetKey}
-          value={inputValue}
-          onChange={setInputValue}
-          onSubmit={handleSubmit}
-          disabled={isStreaming}
-        />
+        <>
+          {started && !isStreaming && (() => {
+            const s = tokenMeter.getSessionStats()
+            if (s.callCount === 0) return null
+            const fmt = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n)
+            const cost = s.totalCost > 0 ? ` | $${s.totalCost.toFixed(4)}` : ''
+            return (
+              <Box paddingX={1}>
+                <Text dimColor>{fmt(s.totalInputTokens)} in / {fmt(s.totalOutputTokens)} out{cost}</Text>
+              </Box>
+            )
+          })()}
+          <InputBar
+            key={inputResetKey}
+            value={inputValue}
+            onChange={setInputValue}
+            onSubmit={handleSubmit}
+            disabled={isStreaming}
+          />
+        </>
       )}
 
       {suggestions.length > 0 && (

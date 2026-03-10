@@ -21,6 +21,7 @@ export type CommandAction =
   | { type: 'show_mcp_status' }
   | { type: 'show_resume_panel' }
   | { type: 'show_fork_panel' }
+  | { type: 'show_usage' }
   | { type: 'error'; message: string }
 
 /**
