@@ -22,6 +22,7 @@ export type CommandAction =
   | { type: 'show_resume_panel' }
   | { type: 'show_fork_panel' }
   | { type: 'show_usage' }
+  | { type: 'run_gc'; dryRun: boolean; days: number | null; target: 'sessions' | 'usage' | 'all' }
   | { type: 'error'; message: string }
 
 /**

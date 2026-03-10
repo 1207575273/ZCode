@@ -19,6 +19,8 @@ import { McpCommand } from '@commands/mcp.js'
 import { ResumeCommand } from '@commands/resume.js'
 import { ForkCommand } from '@commands/fork.js'
 import { UsageCommand } from '@commands/usage.js'
+import { GcCommand } from '@commands/gc.js'
+import { getCleanupStats, executeCleanup } from '@core/cleanup-service.js'
 import { McpStatusView } from './McpStatusView.js'
 import { ResumePanel } from './ResumePanel.js'
 import { ForkPanel } from './ForkPanel.js'
@@ -146,6 +148,7 @@ export function App({
     reg.register(new ResumeCommand())
     reg.register(new ForkCommand())
     reg.register(new UsageCommand())
+    reg.register(new GcCommand())
     return reg
   }, [currentProvider, currentModel])
 
@@ -261,6 +264,48 @@ export function App({
               `本月汇总:  ${fmt(mt.inp)} in / ${fmt(mt.out)} out | ${fmtAggRows(monthRows)} (${mt.calls} calls)`,
             ].join('\n')
             appendSystemMessage(text)
+            return
+          }
+          case 'run_gc': {
+            const fmtSize = (bytes: number) => {
+              if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB'
+              if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB'
+              return bytes + ' B'
+            }
+
+            const opts = {
+              target: action.target,
+              ...(action.days !== null ? { sessionRetentionDays: action.days, usageRetentionDays: action.days } : {}),
+            }
+
+            if (action.dryRun) {
+              const stats = getCleanupStats(opts)
+              const lines = [
+                '── 数据清理预览 (dry-run) ──',
+                '',
+                `会话文件:  ${stats.sessions.totalFiles} 个文件, 共 ${fmtSize(stats.sessions.totalSizeBytes)}`,
+                `  过期:    ${stats.sessions.expiredFiles} 个文件 (${fmtSize(stats.sessions.expiredSizeBytes)})`,
+                '',
+                `用量记录:  ${stats.usage.totalRows} 条`,
+                `  过期:    ${stats.usage.expiredRows} 条`,
+              ]
+              appendSystemMessage(lines.join('\n'))
+            } else {
+              const stats = getCleanupStats(opts)
+              if (stats.sessions.expiredFiles === 0 && stats.usage.expiredRows === 0) {
+                appendSystemMessage('没有需要清理的过期数据。')
+              } else {
+                const result = executeCleanup(opts)
+                const lines = ['── 清理完成 ──', '']
+                if (result.deletedSessionFiles > 0) {
+                  lines.push(`✓ 已清理 ${result.deletedSessionFiles} 个会话文件 (${fmtSize(result.deletedSessionBytes)})`)
+                }
+                if (result.deletedUsageRows > 0) {
+                  lines.push(`✓ 已清理 ${result.deletedUsageRows} 条用量记录`)
+                }
+                appendSystemMessage(lines.join('\n'))
+              }
+            }
             return
           }
           case 'show_resume_panel':
