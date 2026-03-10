@@ -390,7 +390,11 @@ export function App({
   }, [])
   useInput(handleModelPickerKey, { isActive: showModelPicker })
 
-  // Ctrl+C / Escape 全局处理：streaming 时中断响应，空闲时退出
+  // 双击 Ctrl+C 退出计时器（参照 Claude Code：第一次提示，第二次退出）
+  const lastCtrlCRef = useRef(0)
+  const DOUBLE_CTRLC_MS = 2000
+
+  // Ctrl+C / Escape 全局处理
   useInput((input, key) => {
     const isCtrlC = input === 'c' && key.ctrl
     if (isStreaming && pendingPermission == null) {
@@ -400,8 +404,14 @@ export function App({
         appendSystemMessage('⏹ 已中断响应')
       }
     } else if (isCtrlC && !isStreaming) {
-      // 空闲时 Ctrl+C：退出程序
-      exit()
+      // 空闲时 Ctrl+C：双击退出
+      const now = Date.now()
+      if (now - lastCtrlCRef.current < DOUBLE_CTRLC_MS) {
+        exit()
+      } else {
+        lastCtrlCRef.current = now
+        appendSystemMessage('再次 Ctrl+C 退出')
+      }
     }
   })
 

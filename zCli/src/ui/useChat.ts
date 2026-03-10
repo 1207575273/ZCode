@@ -15,7 +15,7 @@ import { useState, useCallback, useRef } from 'react'
 import { randomUUID } from 'node:crypto'
 import { configManager } from '@config/config-manager.js'
 import { createProvider } from '@providers/registry.js'
-import { AgentLoop } from '@core/agent-loop.js'
+import { AgentLoop, isAbortError } from '@core/agent-loop.js'
 import {
   sessionLogger, tokenMeter, getCurrentSessionId,
   buildRegistry, ensureMcpInitialized, registerMcpTools, getMcpStatus,
@@ -208,7 +208,7 @@ export function useChat(): UseChatReturn {
           sessionLogger.logAssistantMessage(accumulated, currentModel)
         }
       } catch (err) {
-        if ((err as Error).name === 'AbortError') {
+        if (isAbortError(err)) {
           // 用户中断：保存已累积的部分回复
           if (accumulated) {
             const partialMsg: ChatMessage = { id: randomUUID(), role: 'assistant', content: accumulated }

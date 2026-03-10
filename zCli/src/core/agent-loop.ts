@@ -156,7 +156,7 @@ export class AgentLoop {
       yield { type: 'llm_usage', inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, stopReason: 'end_turn' }
       return { toolCalls: pendingToolCalls, aborted: false }
     } catch (err) {
-      if ((err as Error).name === 'AbortError') {
+      if (isAbortError(err)) {
         yield { type: 'llm_usage', inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, stopReason: 'abort' }
       } else {
         yield makeLlmError(err instanceof Error ? err.message : String(err), outputTokens)
@@ -281,6 +281,18 @@ export class AgentLoop {
 
 function truncate(text: string, maxLength: number): string {
   return text.length > maxLength ? text.slice(0, maxLength) + '...' : text
+}
+
+/**
+ * 判断是否为 abort 错误。
+ * Node.js 原生 fetch 抛 AbortError（name='AbortError'），
+ * 但 LangChain 等库可能包装为普通 Error，message 含 "aborted"。
+ */
+export function isAbortError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false
+  if (err.name === 'AbortError') return true
+  if (err.message.toLowerCase().includes('aborted')) return true
+  return false
 }
 
 /** 构造 llm_error 事件（兼容 exactOptionalPropertyTypes） */
