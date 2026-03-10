@@ -251,7 +251,6 @@ describe('executeSafeToolsInParallel', () => {
   })
 
   it('超过 maxParallel 时分批执行', async () => {
-    const executionOrder: string[] = []
     const reg = new ToolRegistry()
 
     // 创建 4 个工具，每个执行 50ms，maxParallel = 2 → 需要 2 批
@@ -264,7 +263,6 @@ describe('executeSafeToolsInParallel', () => {
         dangerous: false,
         execute: async () => {
           await sleep(50)
-          executionOrder.push(toolName)
           return { success: true, output: `${toolName} done` }
         },
       })
@@ -309,7 +307,8 @@ describe('executeSafeToolsInParallel', () => {
     const doneEvt = events.find(e => e.type === 'tool_done')
     if (doneEvt?.type === 'tool_done') {
       expect(doneEvt.resultSummary).toBeDefined()
-      expect((doneEvt.resultSummary ?? '').length).toBe(200)
+      // 超过 200 字符时截断为 200 字符 + '...'，共 203 字符
+      expect(doneEvt.resultSummary).toMatch(/^x{200}\.\.\.$/)
     } else {
       expect.fail('未找到 tool_done 事件')
     }

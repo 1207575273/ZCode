@@ -97,7 +97,7 @@ export async function executeSafeToolsInParallel(
     const batch = toolCalls.slice(batchStart, batchStart + maxParallel)
 
     const settled = await Promise.allSettled(
-      batch.map((tc, batchIndex) => executeSingleTool(tc, batchStart + batchIndex, registry, onEvent, ctx)),
+      batch.map((tc) => executeSingleTool(tc, registry, onEvent, ctx)),
     )
 
     for (let i = 0; i < settled.length; i++) {
@@ -139,7 +139,6 @@ export async function executeSafeToolsInParallel(
 
 async function executeSingleTool(
   tc: ToolCallContent,
-  _index: number,
   registry: ToolRegistry,
   onEvent: (event: AgentEvent) => void,
   ctx: ToolContext,
@@ -157,19 +156,17 @@ async function executeSingleTool(
     const result = await registry.execute(tc.toolName, tc.args, ctx)
     const durationMs = Date.now() - startTime
 
-    const summarySource = result.error ?? result.output
-    const resultSummary = summarySource.length > RESULT_SUMMARY_MAX_LEN
-      ? summarySource.slice(0, RESULT_SUMMARY_MAX_LEN)
-      : summarySource
+    const resultSummary = result.success
+      ? (result.output.length > RESULT_SUMMARY_MAX_LEN ? result.output.slice(0, RESULT_SUMMARY_MAX_LEN) + '...' : result.output)
+      : (result.error ?? 'error')
 
-    const trimmedSummary = resultSummary.length > 0 ? resultSummary : undefined
     onEvent({
       type: 'tool_done',
       toolName: tc.toolName,
       toolCallId: tc.toolCallId,
       durationMs,
       success: result.success,
-      ...(trimmedSummary !== undefined ? { resultSummary: trimmedSummary } : {}),
+      ...(resultSummary.length > 0 ? { resultSummary } : {}),
     })
 
     const toolResult: ParallelToolResult = {
@@ -185,14 +182,14 @@ async function executeSingleTool(
     const durationMs = Date.now() - startTime
     const errorMsg = err instanceof Error ? err.message : String(err)
 
-    const errSummary = errorMsg.slice(0, RESULT_SUMMARY_MAX_LEN)
+    const resultSummary = errorMsg.slice(0, RESULT_SUMMARY_MAX_LEN)
     onEvent({
       type: 'tool_done',
       toolName: tc.toolName,
       toolCallId: tc.toolCallId,
       durationMs,
       success: false,
-      ...(errSummary.length > 0 ? { resultSummary: errSummary } : {}),
+      resultSummary,
     })
 
     return {
