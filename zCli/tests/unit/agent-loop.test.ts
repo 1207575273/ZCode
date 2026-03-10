@@ -196,6 +196,34 @@ describe('AgentLoop', () => {
     expect(events.filter(e => e.type === 'tool_start')).toHaveLength(2)
     expect(events.filter(e => e.type === 'tool_done')).toHaveLength(2)
     expect(events.some(e => e.type === 'permission_request')).toBe(true)
+
+    // 验证执行顺序：安全工具的 tool_done 在危险工具的 tool_start 之前
+    const safeDoneIdx = events.findIndex(e => e.type === 'tool_done' && 'toolName' in e && e.toolName === 'read_file')
+    const dangerousStartIdx = events.findIndex(e => e.type === 'tool_start' && 'toolName' in e && e.toolName === 'bash')
+    expect(safeDoneIdx).toBeLessThan(dangerousStartIdx)
+  })
+
+  it('单个安全工具 — 仍然正常执行', async () => {
+    const registry = new ToolRegistry()
+    registry.register({
+      name: 'glob', description: '', parameters: {}, dangerous: false,
+      execute: async () => ({ success: true, output: '*.ts' }),
+    })
+    const provider = makeProvider([
+      [
+        { type: 'tool_call', toolCall: { type: 'tool_call', toolCallId: 'c1', toolName: 'glob', args: {} } },
+        { type: 'done' },
+      ],
+      [{ type: 'text', text: 'ok' }, { type: 'done' }],
+    ])
+    const loop = new AgentLoop(provider, registry, { model: 'mock', provider: 'mock' })
+    const events: AgentEvent[] = []
+    for await (const e of loop.run([{ role: 'user', content: 'search' }])) {
+      events.push(e)
+    }
+    expect(events.some(e => e.type === 'tool_start')).toBe(true)
+    expect(events.some(e => e.type === 'tool_done')).toBe(true)
+    expect(events.some(e => e.type === 'done')).toBe(true)
   })
 
   it('parallelTools=false — 回退到串行执行', async () => {
