@@ -19,7 +19,8 @@ export interface SessionCostStats {
   totalOutputTokens: number
   totalCacheReadTokens: number
   totalCacheWriteTokens: number
-  totalCost: number
+  /** 按币种分组的累计费用 { USD: 1.23, CNY: 4.56 } */
+  costByCurrency: Record<string, number>
   callCount: number
 }
 
@@ -27,6 +28,7 @@ export interface AggregateStats {
   totalInputTokens: number
   totalOutputTokens: number
   totalCost: number
+  currency: string
   callCount: number
 }
 
@@ -36,6 +38,7 @@ interface PricingRule {
   output_price: number
   cache_read_price: number
   cache_write_price: number
+  currency: string
 }
 
 export class TokenMeter {
@@ -59,10 +62,10 @@ export class TokenMeter {
     this.#db = db ?? getDb()
     this.#insertStmt = this.#db.prepare(`
       INSERT INTO usage_logs (session_id, timestamp, provider, model, input_tokens, output_tokens, cache_read, cache_write, cost_amount, cost_currency, pricing_rule_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'USD', ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     this.#pricingStmt = this.#db.prepare(`
-      SELECT id, model_pattern, input_price, output_price, cache_read_price, cache_write_price
+      SELECT id, model_pattern, input_price, output_price, cache_read_price, cache_write_price, currency
       FROM pricing_rules
       WHERE provider = ?
         AND effective_from <= ?
@@ -74,18 +77,22 @@ export class TokenMeter {
         COALESCE(SUM(input_tokens), 0) as totalInputTokens,
         COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
         COALESCE(SUM(cost_amount), 0) as totalCost,
+        cost_currency as currency,
         COUNT(*) as callCount
       FROM usage_logs
       WHERE timestamp >= ?
+      GROUP BY cost_currency
     `)
     this.#monthStmt = this.#db.prepare(`
       SELECT
         COALESCE(SUM(input_tokens), 0) as totalInputTokens,
         COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
         COALESCE(SUM(cost_amount), 0) as totalCost,
+        cost_currency as currency,
         COUNT(*) as callCount
       FROM usage_logs
       WHERE timestamp >= ?
+      GROUP BY cost_currency
     `)
   }
 
@@ -114,6 +121,7 @@ export class TokenMeter {
     const cost = rule
       ? this.#calculateCost(event.inputTokens, event.outputTokens, event.cacheReadTokens, event.cacheWriteTokens, rule)
       : null
+    const currency = rule?.currency ?? 'USD'
 
     this.#insertStmt.run(
       this.#sessionId,
@@ -125,6 +133,7 @@ export class TokenMeter {
       event.cacheReadTokens,
       event.cacheWriteTokens,
       cost,
+      currency,
       rule?.id ?? null,
     )
 
@@ -133,27 +142,27 @@ export class TokenMeter {
     this.#stats.totalOutputTokens += event.outputTokens
     this.#stats.totalCacheReadTokens += event.cacheReadTokens
     this.#stats.totalCacheWriteTokens += event.cacheWriteTokens
-    this.#stats.totalCost += cost ?? 0
+    if (cost != null) {
+      this.#stats.costByCurrency[currency] = (this.#stats.costByCurrency[currency] ?? 0) + cost
+    }
     this.#stats.callCount++
   }
 
   /** 当前会话统计（内存累计，无 SQL 查询） */
   getSessionStats(): SessionCostStats {
-    return { ...this.#stats }
+    return { ...this.#stats, costByCurrency: { ...this.#stats.costByCurrency } }
   }
 
-  /** 今日汇总（SQL 聚合，使用本地日期） */
-  getTodayStats(): AggregateStats {
+  /** 今日汇总（SQL 聚合，按币种分组，使用本地日期） */
+  getTodayStats(): AggregateStats[] {
     const today = localDateStr() // YYYY-MM-DD 本地时区
-    const row = this.#todayStmt.get(today + 'T00:00:00.000Z') as AggregateStats
-    return row
+    return this.#todayStmt.all(today + 'T00:00:00.000Z') as AggregateStats[]
   }
 
-  /** 本月汇总（SQL 聚合，使用本地日期） */
-  getMonthStats(): AggregateStats {
+  /** 本月汇总（SQL 聚合，按币种分组，使用本地日期） */
+  getMonthStats(): AggregateStats[] {
     const month = localDateStr().slice(0, 7) // YYYY-MM 本地时区
-    const row = this.#monthStmt.get(month + '-01T00:00:00.000Z') as AggregateStats
-    return row
+    return this.#monthStmt.all(month + '-01T00:00:00.000Z') as AggregateStats[]
   }
 
   /** 解析计价规则（带缓存：同一 provider+model 只查一次 DB） */
@@ -203,7 +212,7 @@ export class TokenMeter {
       totalOutputTokens: 0,
       totalCacheReadTokens: 0,
       totalCacheWriteTokens: 0,
-      totalCost: 0,
+      costByCurrency: {},
       callCount: 0,
     }
   }

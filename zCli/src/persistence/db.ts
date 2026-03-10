@@ -47,10 +47,10 @@ export function createDb(dbPath: string): DatabaseType {
       id                INTEGER PRIMARY KEY AUTOINCREMENT,  -- 自增主键
       provider          TEXT NOT NULL,                      -- LLM 供应商
       model_pattern     TEXT NOT NULL,                      -- 模型匹配模式（支持末尾 * 通配符）
-      input_price       REAL NOT NULL,                      -- 输入价格 ($/百万 token)
-      output_price      REAL NOT NULL,                      -- 输出价格 ($/百万 token)
-      cache_read_price  REAL NOT NULL DEFAULT 0,            -- 缓存读取价格 ($/百万 token)
-      cache_write_price REAL NOT NULL DEFAULT 0,            -- 缓存写入价格 ($/百万 token)
+      input_price       REAL NOT NULL,                      -- 输入价格 (货币/百万 token)
+      output_price      REAL NOT NULL,                      -- 输出价格 (货币/百万 token)
+      cache_read_price  REAL NOT NULL DEFAULT 0,            -- 缓存读取价格 (货币/百万 token)
+      cache_write_price REAL NOT NULL DEFAULT 0,            -- 缓存写入价格 (货币/百万 token)
       currency          TEXT NOT NULL DEFAULT 'USD',        -- 价格币种
       effective_from    TEXT NOT NULL,                      -- 生效起始日期 (ISO 8601)
       effective_to      TEXT,                               -- 生效截止日期（NULL 表示永久有效）
@@ -103,46 +103,47 @@ export function closeDb(): void {
 /** 写入默认计价规则（幂等：按 provider+model_pattern 去重） */
 function seedDefaultPricing(db: DatabaseType): void {
   const insert = db.prepare(`
-    INSERT INTO pricing_rules (provider, model_pattern, input_price, output_price, cache_read_price, cache_write_price, effective_from, source, priority)
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+    INSERT INTO pricing_rules (provider, model_pattern, input_price, output_price, cache_read_price, cache_write_price, currency, effective_from, source, priority)
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     WHERE NOT EXISTS (
       SELECT 1 FROM pricing_rules WHERE provider = ? AND model_pattern = ?
     )
   `)
 
-  const rules: Array<[string, string, number, number, number, number, string, string, number]> = [
-    // Anthropic
-    ['anthropic', 'claude-opus-4-*',   15.0, 75.0, 1.50, 18.75, '2025-01-01', '官网 2025-01', 0],
-    ['anthropic', 'claude-sonnet-4-*',  3.0, 15.0, 0.30,  3.75, '2025-01-01', '官网 2025-01', 0],
-    ['anthropic', 'claude-haiku-*',     0.8,  4.0, 0.08,  1.00, '2025-01-01', '官网 2025-01', 0],
-    // OpenAI
-    ['openai', 'gpt-4o',               2.5, 10.0, 1.25,  0.0, '2025-01-01', '官网 2025-01', 0],
-    ['openai', 'gpt-4o-mini',          0.15, 0.6, 0.075, 0.0, '2025-01-01', '官网 2025-01', 0],
-    ['openai', 'o3-mini',              1.1,  4.4, 0.55,  0.0, '2025-01-01', '官网 2025-01', 0],
-    // Google
-    ['google', 'gemini-2.0-flash*',    0.1,  0.4, 0.0,   0.0, '2025-01-01', '官网 2025-01', 0],
-    ['google', 'gemini-2.5-pro*',      1.25, 10.0, 0.0,  0.0, '2025-01-01', '官网 2025-01', 0],
-    // DeepSeek
-    ['deepseek', 'deepseek-r1*',       0.55, 2.19, 0.0,  0.0, '2025-01-01', '官网 2025-01', 0],
-    ['deepseek', 'deepseek-v3*',       0.27, 1.10, 0.0,  0.0, '2025-01-01', '官网 2025-01', 0],
-    // 智谱 GLM
-    ['glm', 'glm-5-code*',             1.2,  5.0,  0.0,  0.0, '2026-02-01', 'docs.z.ai 2026-02', 0],
-    ['glm', 'glm-5*',                  1.0,  3.2,  0.0,  0.0, '2026-02-01', 'docs.z.ai 2026-02', 0],
-    ['glm', 'glm-4.7-flash*',          0.0,  0.0,  0.0,  0.0, '2026-02-01', 'docs.z.ai 2026-02 免费', 0],
-    ['glm', 'glm-4.7*',                0.6,  2.2,  0.0,  0.0, '2026-02-01', 'docs.z.ai 2026-02', 0],
-    ['glm', 'glm-4.6*',                0.6,  2.2,  0.0,  0.0, '2026-02-01', 'docs.z.ai 2026-02', 0],
-    ['glm', 'glm-4.5-flash*',          0.0,  0.0,  0.0,  0.0, '2026-02-01', 'docs.z.ai 2026-02 免费', 0],
-    ['glm', 'glm-4.5-airx*',           1.1,  4.5,  0.0,  0.0, '2026-02-01', 'docs.z.ai 2026-02', 0],
-    ['glm', 'glm-4.5-air*',            0.2,  1.1,  0.0,  0.0, '2026-02-01', 'docs.z.ai 2026-02', 0],
-    ['glm', 'glm-4.5-x*',              2.2,  8.9,  0.0,  0.0, '2026-02-01', 'docs.z.ai 2026-02', 0],
-    ['glm', 'glm-4.5*',                0.6,  2.2,  0.0,  0.0, '2026-02-01', 'docs.z.ai 2026-02', 0],
+  // [provider, pattern, input, output, cacheRead, cacheWrite, currency, effectiveFrom, source, priority]
+  const rules: Array<[string, string, number, number, number, number, string, string, string, number]> = [
+    // Anthropic (USD)
+    ['anthropic', 'claude-opus-4-*',   15.0, 75.0, 1.50, 18.75, 'USD', '2025-01-01', '官网 2025-01', 0],
+    ['anthropic', 'claude-sonnet-4-*',  3.0, 15.0, 0.30,  3.75, 'USD', '2025-01-01', '官网 2025-01', 0],
+    ['anthropic', 'claude-haiku-*',     0.8,  4.0, 0.08,  1.00, 'USD', '2025-01-01', '官网 2025-01', 0],
+    // OpenAI (USD)
+    ['openai', 'gpt-4o',               2.5, 10.0, 1.25,  0.0, 'USD', '2025-01-01', '官网 2025-01', 0],
+    ['openai', 'gpt-4o-mini',          0.15, 0.6, 0.075, 0.0, 'USD', '2025-01-01', '官网 2025-01', 0],
+    ['openai', 'o3-mini',              1.1,  4.4, 0.55,  0.0, 'USD', '2025-01-01', '官网 2025-01', 0],
+    // Google (USD)
+    ['google', 'gemini-2.0-flash*',    0.1,  0.4, 0.0,   0.0, 'USD', '2025-01-01', '官网 2025-01', 0],
+    ['google', 'gemini-2.5-pro*',      1.25, 10.0, 0.0,  0.0, 'USD', '2025-01-01', '官网 2025-01', 0],
+    // DeepSeek (CNY — 国内 API)
+    ['deepseek', 'deepseek-r1*',       4.0,  16.0, 1.0,  0.0, 'CNY', '2025-01-01', 'platform.deepseek.com 2025-01', 0],
+    ['deepseek', 'deepseek-v3*',       2.0,   8.0, 0.5,  0.0, 'CNY', '2025-01-01', 'platform.deepseek.com 2025-01', 0],
+    // 智谱 GLM (CNY — 国内 API)
+    ['glm', 'glm-5-code*',             4.0, 18.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
+    ['glm', 'glm-5*',                  4.0, 18.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
+    ['glm', 'glm-4.7-flash*',          0.0,  0.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02 免费', 0],
+    ['glm', 'glm-4.7*',                5.0,  5.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
+    ['glm', 'glm-4.6*',                5.0,  5.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
+    ['glm', 'glm-4.5-flash*',          0.0,  0.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02 免费', 0],
+    ['glm', 'glm-4.5-airx*',          10.0, 10.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
+    ['glm', 'glm-4.5-air*',            0.5,  0.5,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
+    ['glm', 'glm-4.5-x*',             10.0, 10.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
+    ['glm', 'glm-4.5*',                5.0,  5.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
     // Ollama (free)
-    ['ollama', '*',                     0.0,  0.0, 0.0,  0.0, '2025-01-01', '本地免费', 0],
+    ['ollama', '*',                     0.0,  0.0, 0.0,  0.0, 'USD', '2025-01-01', '本地免费', 0],
   ]
 
   const tx = db.transaction(() => {
-    for (const [provider, pattern, inp, out, cacheR, cacheW, from, source, priority] of rules) {
-      insert.run(provider, pattern, inp, out, cacheR, cacheW, from, source, priority, provider, pattern)
+    for (const [provider, pattern, inp, out, cacheR, cacheW, currency, from, source, priority] of rules) {
+      insert.run(provider, pattern, inp, out, cacheR, cacheW, currency, from, source, priority, provider, pattern)
     }
   })
   tx()

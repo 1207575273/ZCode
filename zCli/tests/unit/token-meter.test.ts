@@ -36,6 +36,7 @@ describe('TokenMeter.consume', () => {
     expect(rows[0]!.input_tokens).toBe(1000)
     expect(rows[0]!.output_tokens).toBe(200)
     expect(rows[0]!.cache_read).toBe(500)
+    expect(rows[0]!.cost_currency).toBe('USD')
   })
 
   it('should_calculate_cost_with_matching_pricing_rule', () => {
@@ -125,19 +126,41 @@ describe('TokenMeter.getSessionStats', () => {
     expect(stats.totalInputTokens).toBe(1500)
     expect(stats.totalOutputTokens).toBe(300)
     expect(stats.callCount).toBe(2)
-    expect(stats.totalCost).toBeGreaterThan(0)
+    expect(stats.costByCurrency['USD']).toBeGreaterThan(0)
   })
 })
 
 describe('TokenMeter.getTodayStats', () => {
-  it('should_query_today_usage_from_sqlite', () => {
+  it('should_query_today_usage_from_sqlite_grouped_by_currency', () => {
     const meter = new TokenMeter(db)
     meter.bind('session-1', 'anthropic', 'claude-opus-4-6')
 
     meter.consume({ type: 'llm_usage', inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
 
-    const stats = meter.getTodayStats()
-    expect(stats.totalInputTokens).toBe(1000)
-    expect(stats.totalOutputTokens).toBe(200)
+    const rows = meter.getTodayStats()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.totalInputTokens).toBe(1000)
+    expect(rows[0]!.totalOutputTokens).toBe(200)
+    expect(rows[0]!.currency).toBe('USD')
+  })
+
+  it('should_return_multiple_rows_for_different_currencies', () => {
+    const meter = new TokenMeter(db)
+
+    // USD 调用
+    meter.bind('session-1', 'anthropic', 'claude-opus-4-6')
+    meter.consume({ type: 'llm_usage', inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
+
+    // CNY 调用
+    meter.bind('session-1', 'glm', 'glm-5')
+    meter.consume({ type: 'llm_usage', inputTokens: 500, outputTokens: 100, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
+
+    const rows = meter.getTodayStats()
+    expect(rows).toHaveLength(2)
+    const usdRow = rows.find(r => r.currency === 'USD')
+    const cnyRow = rows.find(r => r.currency === 'CNY')
+    expect(usdRow).toBeDefined()
+    expect(cnyRow).toBeDefined()
+    expect(cnyRow!.totalInputTokens).toBe(500)
   })
 })

@@ -232,18 +232,33 @@ export function App({
           }
           case 'show_usage': {
             const session = tokenMeter.getSessionStats()
-            const today = tokenMeter.getTodayStats()
-            const month = tokenMeter.getMonthStats()
+            const todayRows = tokenMeter.getTodayStats()
+            const monthRows = tokenMeter.getMonthStats()
 
             const fmt = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n)
-            const fmtCost = (n: number) => n > 0 ? '$' + n.toFixed(4) : '--'
+            const currencySymbol = (c: string) => c === 'CNY' ? '¥' : '$'
+            const fmtCostMap = (m: Record<string, number>) => {
+              const parts = Object.entries(m).filter(([, v]) => v > 0).map(([c, v]) => `${currencySymbol(c)}${v.toFixed(4)}`)
+              return parts.length > 0 ? parts.join(' + ') : '--'
+            }
+            const fmtAggRows = (rows: Array<{ totalCost: number; currency: string }>) => {
+              const parts = rows.filter(r => r.totalCost > 0).map(r => `${currencySymbol(r.currency)}${r.totalCost.toFixed(4)}`)
+              return parts.length > 0 ? parts.join(' + ') : '--'
+            }
+            const sumTokens = (rows: Array<{ totalInputTokens: number; totalOutputTokens: number; callCount: number }>) => {
+              let inp = 0, out = 0, calls = 0
+              for (const r of rows) { inp += r.totalInputTokens; out += r.totalOutputTokens; calls += r.callCount }
+              return { inp, out, calls }
+            }
+            const td = sumTokens(todayRows)
+            const mt = sumTokens(monthRows)
 
             const text = [
               '── Token Usage ──',
               '',
-              `本次会话:  ${fmt(session.totalInputTokens)} in / ${fmt(session.totalOutputTokens)} out | ${fmtCost(session.totalCost)} (${session.callCount} calls)`,
-              `今日汇总:  ${fmt(today.totalInputTokens)} in / ${fmt(today.totalOutputTokens)} out | ${fmtCost(today.totalCost)} (${today.callCount} calls)`,
-              `本月汇总:  ${fmt(month.totalInputTokens)} in / ${fmt(month.totalOutputTokens)} out | ${fmtCost(month.totalCost)} (${month.callCount} calls)`,
+              `本次会话:  ${fmt(session.totalInputTokens)} in / ${fmt(session.totalOutputTokens)} out | ${fmtCostMap(session.costByCurrency)} (${session.callCount} calls)`,
+              `今日汇总:  ${fmt(td.inp)} in / ${fmt(td.out)} out | ${fmtAggRows(todayRows)} (${td.calls} calls)`,
+              `本月汇总:  ${fmt(mt.inp)} in / ${fmt(mt.out)} out | ${fmtAggRows(monthRows)} (${mt.calls} calls)`,
             ].join('\n')
             appendSystemMessage(text)
             return
@@ -399,7 +414,9 @@ export function App({
             const s = tokenMeter.getSessionStats()
             if (s.callCount === 0) return null
             const fmt = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n)
-            const cost = s.totalCost > 0 ? ` | $${s.totalCost.toFixed(4)}` : ''
+            const sym = (c: string) => c === 'CNY' ? '¥' : '$'
+            const costParts = Object.entries(s.costByCurrency).filter(([, v]) => v > 0).map(([c, v]) => `${sym(c)}${v.toFixed(4)}`)
+            const cost = costParts.length > 0 ? ` | ${costParts.join(' + ')}` : ''
             return (
               <Box paddingX={1}>
                 <Text dimColor>{fmt(s.totalInputTokens)} in / {fmt(s.totalOutputTokens)} out{cost}</Text>
