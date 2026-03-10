@@ -104,7 +104,8 @@ if (args.prompt != null) {
       ...(args.showResumeOnStart ? { showResumeOnStart: true } : {}),
       ...(args.model != null ? { model: args.model } : {}),
       ...(args.provider != null ? { provider: args.provider } : {}),
-    })
+    }),
+    { exitOnCtrlC: false },
   )
 
   /** 检测启动方式，生成对应的 resume 命令 */

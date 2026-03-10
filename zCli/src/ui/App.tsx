@@ -390,13 +390,20 @@ export function App({
   }, [])
   useInput(handleModelPickerKey, { isActive: showModelPicker })
 
-  // Streaming 期间：Escape 或 Ctrl+C 中断当前响应
+  // Ctrl+C / Escape 全局处理：streaming 时中断响应，空闲时退出
   useInput((input, key) => {
-    if (key.escape || (input === 'c' && key.ctrl)) {
-      abort()
-      appendSystemMessage('⏹ 已中断响应')
+    const isCtrlC = input === 'c' && key.ctrl
+    if (isStreaming && pendingPermission == null) {
+      // streaming 期间：Escape 或 Ctrl+C 中断当前响应
+      if (key.escape || isCtrlC) {
+        abort()
+        appendSystemMessage('⏹ 已中断响应')
+      }
+    } else if (isCtrlC && !isStreaming) {
+      // 空闲时 Ctrl+C：退出程序
+      exit()
     }
-  }, { isActive: isStreaming && pendingPermission == null })
+  })
 
   return (
     <Box flexDirection="column" width="100%">
