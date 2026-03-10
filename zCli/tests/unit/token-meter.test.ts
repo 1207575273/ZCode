@@ -53,6 +53,39 @@ describe('TokenMeter.consume', () => {
     expect(row.cost_amount).toBeCloseTo(22.5, 1)
   })
 
+  it('should_include_cache_tokens_in_cost_calculation', () => {
+    const meter = new TokenMeter(db)
+    meter.bind('session-1', 'anthropic', 'claude-opus-4-6')
+
+    // claude-opus-4-* 价格: input $15/M, output $75/M, cache_read $1.50/M, cache_write $18.75/M
+    const event: AgentEvent = {
+      type: 'llm_usage', inputTokens: 0, outputTokens: 0,
+      cacheReadTokens: 1_000_000, cacheWriteTokens: 1_000_000, stopReason: 'end_turn',
+    }
+    meter.consume(event)
+
+    const row = db.prepare('SELECT cost_amount FROM usage_logs').get() as { cost_amount: number }
+    // cache_read: 1M × $1.50/M = $1.50, cache_write: 1M × $18.75/M = $18.75, total = $20.25
+    expect(row.cost_amount).toBeCloseTo(20.25, 2)
+  })
+
+  it('should_calculate_full_four_dimension_cost', () => {
+    const meter = new TokenMeter(db)
+    meter.bind('session-1', 'anthropic', 'claude-opus-4-6')
+
+    // 四维同时非零
+    const event: AgentEvent = {
+      type: 'llm_usage', inputTokens: 1_000_000, outputTokens: 100_000,
+      cacheReadTokens: 500_000, cacheWriteTokens: 200_000, stopReason: 'end_turn',
+    }
+    meter.consume(event)
+
+    const row = db.prepare('SELECT cost_amount FROM usage_logs').get() as { cost_amount: number }
+    // input: 1M × 15 = 15, output: 0.1M × 75 = 7.5, cache_read: 0.5M × 1.5 = 0.75, cache_write: 0.2M × 18.75 = 3.75
+    // total = 15 + 7.5 + 0.75 + 3.75 = 27.0
+    expect(row.cost_amount).toBeCloseTo(27.0, 2)
+  })
+
   it('should_set_null_cost_when_no_pricing_rule_matches', () => {
     const meter = new TokenMeter(db)
     meter.bind('session-1', 'unknown-provider', 'unknown-model')

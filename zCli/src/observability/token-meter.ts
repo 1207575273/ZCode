@@ -10,7 +10,7 @@
  * - 提供 getTodayStats / getMonthStats 查询接口
  */
 
-import type { Database as DatabaseType } from 'better-sqlite3'
+import type { Database as DatabaseType, Statement } from 'better-sqlite3'
 import { getDb } from '@persistence/db.js'
 import type { AgentEvent } from '@core/agent-loop.js'
 
@@ -45,14 +45,60 @@ export class TokenMeter {
   #model: string = ''
   #stats: SessionCostStats = TokenMeter.#emptyStats()
 
+  // 缓存 prepared statements，避免每次 consume 重复解析 SQL
+  readonly #insertStmt: Statement
+  readonly #pricingStmt: Statement
+  readonly #todayStmt: Statement
+  readonly #monthStmt: Statement
+
+  // 缓存匹配到的计价规则（provider+model 不变时复用）
+  #cachedRuleKey: string = ''
+  #cachedRule: PricingRule | null = null
+
   constructor(db?: DatabaseType) {
     this.#db = db ?? getDb()
+    this.#insertStmt = this.#db.prepare(`
+      INSERT INTO usage_logs (session_id, timestamp, provider, model, input_tokens, output_tokens, cache_read, cache_write, cost_amount, cost_currency, pricing_rule_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'USD', ?)
+    `)
+    this.#pricingStmt = this.#db.prepare(`
+      SELECT id, model_pattern, input_price, output_price, cache_read_price, cache_write_price
+      FROM pricing_rules
+      WHERE provider = ?
+        AND effective_from <= ?
+        AND (effective_to IS NULL OR effective_to > ?)
+      ORDER BY priority DESC, effective_from DESC
+    `)
+    this.#todayStmt = this.#db.prepare(`
+      SELECT
+        COALESCE(SUM(input_tokens), 0) as totalInputTokens,
+        COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
+        COALESCE(SUM(cost_amount), 0) as totalCost,
+        COUNT(*) as callCount
+      FROM usage_logs
+      WHERE timestamp >= ?
+    `)
+    this.#monthStmt = this.#db.prepare(`
+      SELECT
+        COALESCE(SUM(input_tokens), 0) as totalInputTokens,
+        COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
+        COALESCE(SUM(cost_amount), 0) as totalCost,
+        COUNT(*) as callCount
+      FROM usage_logs
+      WHERE timestamp >= ?
+    `)
   }
 
   /** 绑定到当前会话（submit 时调用） */
   bind(sessionId: string, provider: string, model: string): void {
     if (this.#sessionId !== sessionId) {
       this.#stats = TokenMeter.#emptyStats()
+    }
+    // provider/model 变更时清空规则缓存
+    const ruleKey = `${provider}:${model}`
+    if (this.#cachedRuleKey !== ruleKey) {
+      this.#cachedRuleKey = ruleKey
+      this.#cachedRule = null
     }
     this.#sessionId = sessionId
     this.#provider = provider
@@ -64,15 +110,12 @@ export class TokenMeter {
     if (event.type !== 'llm_usage') return
     if (!this.#sessionId) return
 
-    const rule = this.#matchPricingRule(this.#provider, this.#model)
+    const rule = this.#resolveRule()
     const cost = rule
       ? this.#calculateCost(event.inputTokens, event.outputTokens, event.cacheReadTokens, event.cacheWriteTokens, rule)
       : null
 
-    this.#db.prepare(`
-      INSERT INTO usage_logs (session_id, timestamp, provider, model, input_tokens, output_tokens, cache_read, cache_write, cost_amount, cost_currency, pricing_rule_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'USD', ?)
-    `).run(
+    this.#insertStmt.run(
       this.#sessionId,
       new Date().toISOString(),
       this.#provider,
@@ -99,53 +142,39 @@ export class TokenMeter {
     return { ...this.#stats }
   }
 
-  /** 今日汇总（SQL 聚合） */
+  /** 今日汇总（SQL 聚合，使用本地日期） */
   getTodayStats(): AggregateStats {
-    const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
-    const row = this.#db.prepare(`
-      SELECT
-        COALESCE(SUM(input_tokens), 0) as totalInputTokens,
-        COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
-        COALESCE(SUM(cost_amount), 0) as totalCost,
-        COUNT(*) as callCount
-      FROM usage_logs
-      WHERE timestamp >= ?
-    `).get(today + 'T00:00:00.000Z') as AggregateStats
+    const today = localDateStr() // YYYY-MM-DD 本地时区
+    const row = this.#todayStmt.get(today + 'T00:00:00.000Z') as AggregateStats
     return row
   }
 
-  /** 本月汇总（SQL 聚合） */
+  /** 本月汇总（SQL 聚合，使用本地日期） */
   getMonthStats(): AggregateStats {
-    const month = new Date().toISOString().slice(0, 7) // YYYY-MM
-    const row = this.#db.prepare(`
-      SELECT
-        COALESCE(SUM(input_tokens), 0) as totalInputTokens,
-        COALESCE(SUM(output_tokens), 0) as totalOutputTokens,
-        COALESCE(SUM(cost_amount), 0) as totalCost,
-        COUNT(*) as callCount
-      FROM usage_logs
-      WHERE timestamp >= ?
-    `).get(month + '-01T00:00:00.000Z') as AggregateStats
+    const month = localDateStr().slice(0, 7) // YYYY-MM 本地时区
+    const row = this.#monthStmt.get(month + '-01T00:00:00.000Z') as AggregateStats
     return row
   }
 
-  /** 匹配计价规则：provider 精确匹配 + model_pattern 通配符匹配 */
-  #matchPricingRule(provider: string, model: string): PricingRule | null {
+  /** 解析计价规则（带缓存：同一 provider+model 只查一次 DB） */
+  #resolveRule(): PricingRule | null {
+    const key = `${this.#provider}:${this.#model}`
+    if (this.#cachedRuleKey === key && this.#cachedRule !== null) {
+      return this.#cachedRule
+    }
+
     const now = new Date().toISOString()
-    const rules = this.#db.prepare(`
-      SELECT id, model_pattern, input_price, output_price, cache_read_price, cache_write_price
-      FROM pricing_rules
-      WHERE provider = ?
-        AND effective_from <= ?
-        AND (effective_to IS NULL OR effective_to > ?)
-      ORDER BY priority DESC, effective_from DESC
-    `).all(provider, now, now) as Array<PricingRule & { model_pattern: string }>
+    const rules = this.#pricingStmt.all(this.#provider, now, now) as Array<PricingRule & { model_pattern: string }>
 
     for (const rule of rules) {
-      if (this.#matchPattern(rule.model_pattern, model)) {
+      if (this.#matchPattern(rule.model_pattern, this.#model)) {
+        this.#cachedRuleKey = key
+        this.#cachedRule = rule
         return rule
       }
     }
+    // 未匹配也缓存结果，避免每次都查 DB
+    this.#cachedRuleKey = key
     return null
   }
 
@@ -178,4 +207,13 @@ export class TokenMeter {
       callCount: 0,
     }
   }
+}
+
+/** 返回本地时区的 YYYY-MM-DD 字符串 */
+function localDateStr(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
