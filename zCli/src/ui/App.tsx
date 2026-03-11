@@ -20,6 +20,7 @@ import { ResumeCommand } from '@commands/resume.js'
 import { ForkCommand } from '@commands/fork.js'
 import { UsageCommand } from '@commands/usage.js'
 import { GcCommand } from '@commands/gc.js'
+import { SkillsCommand } from '@commands/skills.js'
 import { getCleanupStats, executeCleanup } from '@core/cleanup-service.js'
 import { McpStatusView } from './McpStatusView.js'
 import { ResumePanel } from './ResumePanel.js'
@@ -27,6 +28,7 @@ import { ForkPanel } from './ForkPanel.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
 import { sessionStore, toProjectSlug } from '@persistence/index.js'
 import { tokenMeter } from './useChat.js'
+import { skillStore, ensureSkillsDiscovered } from '@core/bootstrap.js'
 
 /**
  * App — ZCli 根组件
@@ -150,6 +152,7 @@ export function App({
     reg.register(new ForkCommand())
     reg.register(new UsageCommand())
     reg.register(new GcCommand())
+    reg.register(new SkillsCommand())
     return reg
   }, [currentProvider, currentModel])
 
@@ -329,6 +332,31 @@ export function App({
                 setMcpLoading(false)
               }
             })()
+            return
+          case 'list_skills':
+            ensureSkillsDiscovered().then(() => {
+              const skills = skillStore.getAll()
+              if (skills.length === 0) {
+                appendSystemMessage('No skills available.')
+              } else {
+                const lines = ['── Available Skills ──', '']
+                for (const s of skills) {
+                  const tag = s.source === 'builtin' ? ' [built-in]' : s.source === 'project' ? ' [project]' : ''
+                  lines.push(`  ${s.name}${tag}  ${s.description}`)
+                }
+                lines.push('', 'Usage: /skills <name> to load a skill')
+                appendSystemMessage(lines.join('\n'))
+              }
+            })
+            return
+          case 'load_skill':
+            skillStore.getContent(action.name).then(content => {
+              if (!content) {
+                appendSystemMessage(`Skill "${action.name}" not found. Use /skills to list available skills.`)
+              } else {
+                appendSystemMessage(`── Skill loaded: ${action.name} ──\n\n${content}`)
+              }
+            })
             return
           case 'error':
             appendSystemMessage(action.message)

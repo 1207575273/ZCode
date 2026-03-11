@@ -23,6 +23,8 @@ export type CommandAction =
   | { type: 'show_fork_panel' }
   | { type: 'show_usage' }
   | { type: 'run_gc'; dryRun: boolean; days: number | null; target: 'sessions' | 'usage' | 'all' }
+  | { type: 'list_skills' }
+  | { type: 'load_skill'; name: string }
   | { type: 'error'; message: string }
 
 /**

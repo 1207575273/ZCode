@@ -19,6 +19,7 @@ import { AgentLoop, isAbortError } from '@core/agent-loop.js'
 import {
   sessionLogger, tokenMeter, getCurrentSessionId,
   buildRegistry, ensureMcpInitialized, registerMcpTools, getMcpStatus,
+  ensureSkillsDiscovered, getSkillsSystemPrompt, skillStore,
 } from '@core/bootstrap.js'
 import type { ChatMessage } from './ChatView.js'
 import type { Message } from '@core/types.js'
@@ -146,12 +147,6 @@ export function useChat(): UseChatReturn {
     const controller = new AbortController()
     abortRef.current = controller
 
-    const loop = new AgentLoop(provider, registry, {
-      model: currentModel,
-      provider: currentProvider,
-      signal: controller.signal,
-    })
-
     // toolCallId → eventId 映射，保证多次调用同名工具时状态更新精确匹配
     const pendingToolIds = new Map<string, string>()
 
@@ -163,8 +158,21 @@ export function useChat(): UseChatReturn {
         if (sid) tokenMeter.bind(sid, currentProvider, currentModel)
         sessionLogger.logUserMessage(text)
 
+        // 初始化 Skills 和 MCP（幂等）
+        await ensureSkillsDiscovered()
         await ensureMcpInitialized()
         registerMcpTools(registry)
+
+        // Skills system prompt（discover 完成后获取）
+        const skillsPrompt = getSkillsSystemPrompt()
+
+        const loop = new AgentLoop(provider, registry, {
+          model: currentModel,
+          provider: currentProvider,
+          signal: controller.signal,
+          ...(skillsPrompt ? { systemPrompt: skillsPrompt } : {}),
+        })
+
         for await (const event of loop.run(history)) {
           // F9: 观测日志记录
           sessionLogger.consume(event)

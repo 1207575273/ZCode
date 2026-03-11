@@ -38,7 +38,11 @@ export class OpenAICompatProvider implements LLMProvider {
         })))
       : baseModel
 
-    const langchainMsgs = toLangChainMessages(request.messages)
+    // System Prompt 注入：作为首条 system message 发送给 LLM
+    const messagesWithSystem = request.systemPrompt
+      ? [{ role: 'system' as const, content: request.systemPrompt }, ...request.messages]
+      : request.messages
+    const langchainMsgs = toLangChainMessages(messagesWithSystem)
 
     dbg(`[DEBUG][${this.name}] chat request:\n`)
     dbg(`  model: ${request.model}\n`)

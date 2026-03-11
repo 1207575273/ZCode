@@ -54,6 +54,8 @@ export interface AgentConfig {
   parallelTools?: boolean | undefined
   /** 最大并行工具数（默认 5） */
   maxParallelTools?: number | undefined
+  /** 系统提示词，注入到每次 LLM 调用的首条 system message */
+  systemPrompt?: string | undefined
 }
 
 // ═══════════════════════════════════════════════
@@ -124,6 +126,7 @@ export class AgentLoop {
       messages: history,
       tools: this.#registry.toToolDefinitions(),
       ...(this.#config.signal !== undefined ? { signal: this.#config.signal } : {}),
+      ...(this.#config.systemPrompt !== undefined ? { systemPrompt: this.#config.systemPrompt } : {}),
     }
 
     yield { type: 'llm_start', provider: this.#config.provider, model: this.#config.model, messageCount: history.length }

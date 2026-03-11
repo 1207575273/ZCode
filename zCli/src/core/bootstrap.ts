@@ -20,11 +20,16 @@ import { BashTool } from '@tools/bash.js'
 import { loadMcpConfigWithSources } from '@config/mcp-config.js'
 import { McpManager } from '@mcp/mcp-manager.js'
 import { SessionLogger, TokenMeter } from '@observability/index.js'
+import { SkillStore } from './skills/store.js'
+import { SkillTool } from './skills/skill-tool.js'
 
 // ═══ 模块级单例 ═══
 
 let mcpManager: McpManager | null = null
 let mcpInitialized = false
+
+/** 模块级 SkillStore 实例 */
+export const skillStore = new SkillStore()
 
 /** 模块级 SessionLogger 实例，管理会话持久化和观测事件 */
 export const sessionLogger = new SessionLogger()
@@ -39,7 +44,7 @@ export function getCurrentSessionId(): string | null {
 
 // ═══ 工厂函数 ═══
 
-/** 构建包含全部内置工具的 ToolRegistry */
+/** 构建包含全部内置工具的 ToolRegistry（含 skill 工具） */
 export function buildRegistry(): ToolRegistry {
   const reg = new ToolRegistry()
   reg.register(new ReadFileTool())
@@ -48,7 +53,18 @@ export function buildRegistry(): ToolRegistry {
   reg.register(new GlobTool())
   reg.register(new GrepTool())
   reg.register(new BashTool())
+  reg.register(new SkillTool(skillStore))
   return reg
+}
+
+/** 确保 Skills 已发现（幂等） */
+export async function ensureSkillsDiscovered(): Promise<void> {
+  await skillStore.discover()
+}
+
+/** 获取 skills 的 system prompt 段落 */
+export function getSkillsSystemPrompt(): string {
+  return skillStore.buildSystemPromptSection()
 }
 
 /** 确保 MCP Server 已初始化连接（幂等，只连接一次） */
