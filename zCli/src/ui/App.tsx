@@ -129,6 +129,16 @@ export function App({
 
   const started = messages.length > 0 || isStreaming
 
+  // 对话开始时清屏：WelcomeScreen 已写入终端的内容不会被 Ink 自动移除，
+  // 需要手动清屏让 ChatView 从干净的终端开始渲染
+  const hasClearedRef = useRef(false)
+  useEffect(() => {
+    if (started && !hasClearedRef.current) {
+      hasClearedRef.current = true
+      process.stdout.write('\x1b[2J\x1b[H')
+    }
+  }, [started])
+
   // Handle --resume CLI flag
   useEffect(() => {
     if (resumeSessionId) {
