@@ -1,4 +1,4 @@
-// src/core/skills/types.ts
+// src/skills/engine/types.ts
 
 /** Skill 元数据，从 SKILL.md frontmatter 中解析 */
 export interface SkillMetadata {

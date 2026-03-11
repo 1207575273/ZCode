@@ -1,4 +1,4 @@
-// src/core/skills/skill-tool.ts
+// src/skills/engine/skill-tool.ts
 
 /**
  * Skill 原子工具 — 注册到 ToolRegistry，供 LLM 按需调用加载 Skill 正文。

@@ -24,7 +24,8 @@
       "@observability/*": ["src/observability/*"],
       "@config/*": ["src/config/*"],
       "@utils/*": ["src/utils/*"],
-      "@mcp/*": ["src/mcp/*"]
+      "@mcp/*": ["src/mcp/*"],
+      "@skills/*": ["src/skills/*"]
     },
     "outDir": "dist",
     "rootDir": ".",

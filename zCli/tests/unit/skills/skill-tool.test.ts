@@ -1,8 +1,8 @@
 // tests/unit/skills/skill-tool.test.ts
 
 import { describe, it, expect, beforeAll } from 'vitest'
-import { SkillStore } from '@core/skills/store.js'
-import { SkillTool } from '@core/skills/skill-tool.js'
+import { SkillStore } from '@skills/engine/store.js'
+import { SkillTool } from '@skills/engine/skill-tool.js'
 
 describe('SkillTool', () => {
   let store: SkillStore

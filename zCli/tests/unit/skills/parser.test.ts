@@ -1,7 +1,7 @@
 // tests/unit/skills/parser.test.ts
 
 import { describe, it, expect } from 'vitest'
-import { parseSkillFile, toSkillMetadata } from '@core/skills/parser.js'
+import { parseSkillFile, toSkillMetadata } from '@skills/engine/parser.js'
 
 describe('parseSkillFile', () => {
   it('should_parse_frontmatter_and_body_when_valid_skill_md', () => {

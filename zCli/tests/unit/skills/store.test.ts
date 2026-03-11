@@ -1,7 +1,7 @@
 // tests/unit/skills/store.test.ts
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import { SkillStore } from '@core/skills/store.js'
+import { SkillStore } from '@skills/engine/store.js'
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'

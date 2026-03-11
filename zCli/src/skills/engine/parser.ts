@@ -1,4 +1,4 @@
-// src/core/skills/parser.ts
+// src/skills/engine/parser.ts
 
 /**
  * SKILL.md 解析器 — 提取 YAML frontmatter + Markdown body。

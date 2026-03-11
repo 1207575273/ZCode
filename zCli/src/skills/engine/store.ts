@@ -1,4 +1,4 @@
-// src/core/skills/store.ts
+// src/skills/engine/store.ts
 
 /**
  * SkillStore — 文件系统 Skill 发现与管理。
@@ -19,8 +19,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 
 /** 内置 skills 目录（相对于编译后的 dist 结构） */
 function builtinSkillsDir(): string {
-  // src/core/skills/store.ts → src/skills/
-  return join(__dirname, '..', '..', 'skills')
+  // src/skills/engine/store.ts → src/skills/builtin/
+  return join(__dirname, '..', 'builtin')
 }
 
 /** 用户级 skills 目录 */

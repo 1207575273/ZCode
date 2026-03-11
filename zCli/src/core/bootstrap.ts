@@ -20,8 +20,8 @@ import { BashTool } from '@tools/bash.js'
 import { loadMcpConfigWithSources } from '@config/mcp-config.js'
 import { McpManager } from '@mcp/mcp-manager.js'
 import { SessionLogger, TokenMeter } from '@observability/index.js'
-import { SkillStore } from './skills/store.js'
-import { SkillTool } from './skills/skill-tool.js'
+import { SkillStore } from '@skills/engine/store.js'
+import { SkillTool } from '@skills/engine/skill-tool.js'
 
 // ═══ 模块级单例 ═══
 
