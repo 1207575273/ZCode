@@ -176,6 +176,7 @@ export function useChat(): UseChatReturn {
           provider: currentProvider,
           signal: controller.signal,
           ...(skillsPrompt ? { systemPrompt: skillsPrompt } : {}),
+          ...(sid ? { sessionId: sid } : {}),
         })
 
         for await (const event of loop.run(history)) {

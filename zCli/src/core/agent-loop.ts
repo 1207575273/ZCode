@@ -14,6 +14,8 @@
 
 import type { LLMProvider } from '@providers/provider.js'
 import type { ToolRegistry } from '@tools/registry.js'
+import type { ToolResult } from '@tools/types.js'
+import { isStreamableTool } from '@tools/types.js'
 import type { Message, ToolCallContent, StreamChunk } from './types.js'
 import { classifyToolCalls, executeSafeToolsInParallel } from './parallel-executor.js'
 
@@ -29,6 +31,9 @@ import { classifyToolCalls, executeSafeToolsInParallel } from './parallel-execut
  *
  * 观测事件（SessionLogger 消费，写入 JSONL）：
  *   llm_start / llm_usage / llm_error / tool_fallback / permission_grant
+ *
+ * 子 Agent 事件（SubAgent 场景）：
+ *   subagent_progress
  */
 export type AgentEvent =
   // 业务事件
@@ -44,6 +49,8 @@ export type AgentEvent =
   | { type: 'llm_error';          error: string; partialOutputTokens?: number }
   | { type: 'tool_fallback';      toolName: string; fromLevel: string; toLevel: string; reason: string }
   | { type: 'permission_grant';   toolName: string; always: boolean }
+  // 子 Agent 事件 — dispatch_agent 的 stream() 通过 yield* 透传到主 AgentLoop
+  | { type: 'subagent_progress';  agentId: string; description: string; turn: number; maxTurns: number; currentTool?: string }
 
 export interface AgentConfig {
   model: string
@@ -56,14 +63,22 @@ export interface AgentConfig {
   maxParallelTools?: number | undefined
   /** 系统提示词，注入到每次 LLM 调用的首条 system message */
   systemPrompt?: string | undefined
+  /** 最大轮次（默认 20，子 Agent 可设更小值防止过长执行） */
+  maxTurns?: number | undefined
+  /** 标记为侧链（子 Agent），跳过权限检查弹窗 */
+  isSidechain?: boolean | undefined
+  /** 子 Agent ID（日志和事件用） */
+  agentId?: string | undefined
+  /** 当前会话 ID（子 Agent JSONL 需要关联父会话） */
+  sessionId?: string | undefined
 }
 
 // ═══════════════════════════════════════════════
 // 常量
 // ═══════════════════════════════════════════════
 
-/** 最大自动执行轮次，防止死循环 */
-const MAX_TURNS = 20
+/** 主 Agent 默认最大轮次 */
+const DEFAULT_MAX_TURNS = 20
 
 /** resultSummary 最大长度 */
 const RESULT_SUMMARY_MAX_LENGTH = 200
@@ -87,13 +102,20 @@ export class AgentLoop {
     this.#config = config
   }
 
+  /** 暴露 provider 给 StreamableTool（子 Agent 需要继承 provider） */
+  get provider(): LLMProvider { return this.#provider }
+
+  /** 暴露 registry 给 StreamableTool（子 Agent 需要 cloneWithout） */
+  get registry(): ToolRegistry { return this.#registry }
+
   /**
    * 主循环：LLM 调用 → [工具执行 → LLM 调用]* → 文本回复
    */
   async *run(messages: Message[]): AsyncIterable<AgentEvent> {
     const history: Message[] = [...messages]
+    const maxTurns = this.#config.maxTurns ?? DEFAULT_MAX_TURNS
 
-    for (let turn = 0; turn < MAX_TURNS; turn++) {
+    for (let turn = 0; turn < maxTurns; turn++) {
       const llmResult = yield* this.#callLLM(history)
       if (llmResult.aborted) return
 
@@ -105,7 +127,7 @@ export class AgentLoop {
       yield* this.#executeToolCalls(llmResult.toolCalls, history)
     }
 
-    yield { type: 'error', error: `超过最大轮次限制 (${MAX_TURNS})` }
+    yield { type: 'error', error: `超过最大轮次限制 (${maxTurns})` }
   }
 
   // ─────────────────────────────────────────────
@@ -211,7 +233,7 @@ export class AgentLoop {
     // 1. 并行执行安全工具
     if (safe.length > 0) {
       const events: AgentEvent[] = []
-      const ctx = { cwd: process.cwd() }
+      const ctx = buildToolContext(this.#provider, this.#registry, this.#config)
       const results = await executeSafeToolsInParallel(
         safe, this.#registry, (e) => events.push(e), ctx, this.#config.maxParallelTools,
       )
@@ -237,12 +259,15 @@ export class AgentLoop {
   /**
    * 执行单个工具调用。
    *
-   * yield: tool_start → [permission_request → permission_grant] → tool_done
+   * 普通工具：await tool.execute()
+   * 流式工具（StreamableTool）：yield* tool.stream()，中间事件实时透传
+   *
+   * yield: tool_start → [permission_request → permission_grant] → [subagent_progress*] → tool_done
    */
   async *#executeOneTool(tc: ToolCallContent, history: Message[]): AsyncGenerator<AgentEvent> {
     yield { type: 'tool_start', toolName: tc.toolName, toolCallId: tc.toolCallId, args: tc.args }
 
-    // 权限检查
+    // 权限检查：isSidechain 模式跳过弹窗（主 Agent 派发即授权）
     const allowed = yield* this.#checkPermission(tc)
     if (!allowed) {
       history.push({ role: 'user', content: `[Tool ${tc.toolName} was rejected by user]` })
@@ -250,9 +275,21 @@ export class AgentLoop {
       return
     }
 
-    // 执行
+    // 构建 ToolContext（流式工具需要 provider/registry 来创建子 AgentLoop）
+    const ctx = buildToolContext(this.#provider, this.#registry, this.#config)
+
     const start = Date.now()
-    const result = await this.#registry.execute(tc.toolName, tc.args, { cwd: process.cwd() })
+    const tool = this.#registry.get(tc.toolName)
+
+    let result: ToolResult
+    if (tool && isStreamableTool(tool)) {
+      // 流式工具（如 dispatch_agent）：yield* 透传中间事件，return 值为最终结果
+      result = yield* (tool.stream(tc.args, ctx) as AsyncGenerator<AgentEvent, ToolResult>)
+    } else {
+      // 普通工具：await execute()
+      result = await this.#registry.execute(tc.toolName, tc.args, ctx)
+    }
+
     const durationMs = Date.now() - start
 
     history.push({
@@ -271,6 +308,9 @@ export class AgentLoop {
 
   /** 安全工具直接放行；危险工具 yield permission_request 暂停等待用户确认 */
   async *#checkPermission(tc: ToolCallContent): AsyncGenerator<AgentEvent, boolean> {
+    // isSidechain 模式：子 Agent 内所有工具自动批准（主 Agent 派发即授权）
+    if (this.#config.isSidechain) return true
+
     if (!this.#registry.isDangerous(tc.toolName)) return true
 
     let resolvePermission!: (v: boolean) => void
@@ -310,4 +350,18 @@ function makeLlmError(error: string, partialTokens: number): AgentEvent {
   return partialTokens > 0
     ? { type: 'llm_error', error, partialOutputTokens: partialTokens }
     : { type: 'llm_error', error }
+}
+
+/** 构建 ToolContext，兼容 exactOptionalPropertyTypes（不传 undefined 值） */
+function buildToolContext(provider: LLMProvider, registry: ToolRegistry, config: AgentConfig): import('@tools/types.js').ToolContext {
+  const ctx: import('@tools/types.js').ToolContext = {
+    cwd: process.cwd(),
+    provider,
+    providerName: config.provider,
+    model: config.model,
+    registry,
+  }
+  if (config.signal !== undefined) { ctx.signal = config.signal }
+  if (config.sessionId !== undefined) { ctx.sessionId = config.sessionId }
+  return ctx
 }

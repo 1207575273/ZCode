@@ -17,6 +17,7 @@ import { EditFileTool } from '@tools/edit-file.js'
 import { GlobTool } from '@tools/glob.js'
 import { GrepTool } from '@tools/grep.js'
 import { BashTool } from '@tools/bash.js'
+import { DispatchAgentTool } from '@tools/dispatch-agent.js'
 import { loadMcpConfigWithSources } from '@config/mcp-config.js'
 import { McpManager } from '@mcp/mcp-manager.js'
 import { SessionLogger, TokenMeter } from '@observability/index.js'
@@ -53,6 +54,7 @@ export function buildRegistry(): ToolRegistry {
   reg.register(new GlobTool())
   reg.register(new GrepTool())
   reg.register(new BashTool())
+  reg.register(new DispatchAgentTool())
   reg.register(new SkillTool(skillStore))
   return reg
 }

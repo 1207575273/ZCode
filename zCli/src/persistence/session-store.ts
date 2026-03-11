@@ -281,6 +281,52 @@ export class SessionStore {
     }
   }
 
+  /**
+   * 创建子 Agent JSONL 文件，写入 session_start 事件。
+   *
+   * 目录结构（与 Claude Code 对齐）:
+   *   <baseDir>/<projectSlug>/<parentSessionId>/subagents/agent-<agentId>.jsonl
+   *
+   * 返回虚拟 sessionId = `subagent-<agentId>`，用于后续 append 操作。
+   */
+  createSubagent(
+    agentId: string,
+    parentSessionId: string,
+    cwd: string,
+    provider: string,
+    model: string,
+  ): string {
+    const projectSlug = toProjectSlug(cwd)
+    const subagentDir = join(this.baseDir, projectSlug, parentSessionId, 'subagents')
+    mkdirSync(subagentDir, { recursive: true })
+
+    const virtualSessionId = `subagent-${agentId}`
+    const filePath = join(subagentDir, `agent-${agentId}.jsonl`)
+
+    const gitBranch = getGitBranch(cwd)
+    const eventId = generateEventId()
+
+    const event: SessionEvent = {
+      sessionId: virtualSessionId,
+      type: 'session_start',
+      timestamp: new Date().toISOString(),
+      uuid: eventId,
+      parentUuid: null,
+      cwd,
+      gitBranch,
+      provider,
+      model,
+      isSidechain: true,
+      agentId,
+      parentSessionId,
+    }
+
+    appendFileSync(filePath, JSON.stringify(event) + '\n', 'utf-8')
+    this.#pathCache.set(virtualSessionId, filePath)
+
+    return virtualSessionId
+  }
+
   /** Walk from leafUuid up to root via parentUuid, return chronological path */
   #buildEventPath(events: SessionEvent[], leafUuid: string): SessionEvent[] {
     const eventMap = new Map<string, SessionEvent>()

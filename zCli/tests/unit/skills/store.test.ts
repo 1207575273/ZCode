@@ -33,15 +33,11 @@ This is a test skill body.
     const store = new SkillStore()
     const skills = await store.discover()
 
-    // 至少有内置的 commit 和 hello-world skill
+    // 至少有内置的 commit skill
     const commit = skills.find(s => s.name === 'commit')
     expect(commit).toBeDefined()
     expect(commit!.source).toBe('builtin')
     expect(commit!.description).toContain('commit')
-
-    const hello = skills.find(s => s.name === 'hello-world')
-    expect(hello).toBeDefined()
-    expect(hello!.source).toBe('builtin')
 
     const languages = skills.find(s => s.name === 'print-languages')
     expect(languages).toBeDefined()

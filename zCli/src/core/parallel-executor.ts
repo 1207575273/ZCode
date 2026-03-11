@@ -11,6 +11,7 @@
 import type { ToolCallContent } from './types.js'
 import type { ToolRegistry } from '@tools/registry.js'
 import type { ToolContext } from '@tools/types.js'
+import { isStreamableTool } from '@tools/types.js'
 import type { AgentEvent } from './agent-loop.js'
 
 // ═══════════════════════════════════════════════
@@ -60,7 +61,9 @@ export function classifyToolCalls(
   const dangerous: ToolCallContent[] = []
 
   for (const tc of toolCalls) {
-    if (!registry.has(tc.toolName) || registry.isDangerous(tc.toolName)) {
+    const tool = registry.get(tc.toolName)
+    // StreamableTool（如 dispatch_agent）必须走串行路径，因为需要 yield* stream()
+    if (!tool || registry.isDangerous(tc.toolName) || isStreamableTool(tool)) {
       dangerous.push(tc)
     } else {
       safe.push(tc)

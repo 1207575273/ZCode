@@ -17,6 +17,26 @@ export class ToolRegistry {
     return this.#tools.has(name)
   }
 
+  /** 获取原始 Tool 实例（用于 isStreamableTool 判断等） */
+  get(name: string): Tool | undefined {
+    return this.#tools.get(name)
+  }
+
+  /**
+   * 克隆当前 registry，排除指定工具。
+   * 用于构建子 Agent 的受限工具集（如排除 dispatch_agent 防递归）。
+   */
+  cloneWithout(...names: string[]): ToolRegistry {
+    const excludeSet = new Set(names)
+    const cloned = new ToolRegistry()
+    for (const tool of this.#tools.values()) {
+      if (!excludeSet.has(tool.name)) {
+        cloned.register(tool)
+      }
+    }
+    return cloned
+  }
+
   isDangerous(name: string): boolean {
     return this.#tools.get(name)?.dangerous === true
   }

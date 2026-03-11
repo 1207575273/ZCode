@@ -73,6 +73,7 @@ export async function runPipe(options: PipeOptions): Promise<void> {
     model: modelName,
     provider: providerName,
     signal: controller.signal,
+    ...(sid ? { sessionId: sid } : {}),
   })
 
   let accumulated = ''

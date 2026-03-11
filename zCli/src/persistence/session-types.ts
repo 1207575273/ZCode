@@ -76,6 +76,11 @@ export interface SessionEvent {
   source?: string            // 'llm' | 'tool' | 'mcp' | 'system'
   stack?: string
 
+  /** 子 Agent 标记 */
+  isSidechain?: boolean       // 标记为子 Agent 会话
+  agentId?: string            // 子 Agent 唯一 ID
+  parentSessionId?: string    // 父会话 ID（关联追踪）
+
   /** 会话汇总 (session_end) */
   totalInputTokens?: number
   totalOutputTokens?: number
