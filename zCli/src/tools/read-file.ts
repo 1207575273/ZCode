@@ -28,9 +28,11 @@ export class ReadFileTool implements Tool {
         content = content.slice(0, MAX_CHARS)
         truncated = true
       }
+      const totalLines = content.split('\n').length
       return {
         success: true,
         output: truncated ? content + '\n\n[内容已截断]' : content,
+        meta: { type: 'read', path: rawPath, totalLines },
       }
     } catch (err) {
       if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT') {

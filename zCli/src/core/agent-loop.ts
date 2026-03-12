@@ -14,7 +14,7 @@
 
 import type { LLMProvider } from '@providers/provider.js'
 import type { ToolRegistry } from '@tools/registry.js'
-import type { ToolResult } from '@tools/types.js'
+import type { ToolResult, ToolResultMeta } from '@tools/types.js'
 import { isStreamableTool } from '@tools/types.js'
 import type { Message, ToolCallContent, StreamChunk } from './types.js'
 import { classifyToolCalls, executeSafeToolsInParallel } from './parallel-executor.js'
@@ -39,7 +39,7 @@ export type AgentEvent =
   // 业务事件
   | { type: 'text';               text: string }
   | { type: 'tool_start';         toolName: string; toolCallId: string; args: Record<string, unknown> }
-  | { type: 'tool_done';          toolName: string; toolCallId: string; durationMs: number; success: boolean; resultSummary?: string }
+  | { type: 'tool_done';          toolName: string; toolCallId: string; durationMs: number; success: boolean; resultSummary?: string; meta?: ToolResultMeta }
   | { type: 'permission_request'; toolName: string; args: Record<string, unknown>; resolve: (allow: boolean) => void }
   | { type: 'error';              error: string }
   | { type: 'done' }
@@ -303,7 +303,11 @@ export class AgentLoop {
       ? truncate(result.output, RESULT_SUMMARY_MAX_LENGTH)
       : (result.error ?? 'error')
 
-    yield { type: 'tool_done', toolName: tc.toolName, toolCallId: tc.toolCallId, durationMs, success: result.success, resultSummary }
+    yield {
+      type: 'tool_done', toolName: tc.toolName, toolCallId: tc.toolCallId,
+      durationMs, success: result.success, resultSummary,
+      ...(result.meta !== undefined ? { meta: result.meta } : {}),
+    }
   }
 
   /** 安全工具直接放行；危险工具 yield permission_request 暂停等待用户确认 */

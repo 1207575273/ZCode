@@ -1,7 +1,7 @@
 // src/tools/edit-file.ts
 import { readFile, writeFile } from 'node:fs/promises'
 import { resolvePath } from '@platform/path-utils.js'
-import type { Tool, ToolContext, ToolResult } from './types.js'
+import type { Tool, ToolContext, ToolResult, ToolResultMeta } from './types.js'
 
 export class EditFileTool implements Tool {
   readonly name = 'edit_file'
@@ -36,7 +36,26 @@ export class EditFileTool implements Tool {
 
       const updated = content.replace(oldStr, newStr)
       await writeFile(path, updated, 'utf-8')
-      return { success: true, output: `已替换 ${path}` }
+
+      // 计算 diff 和行数统计，供 UI 渲染红绿行
+      const oldLines = oldStr.split('\n').length
+      const newLines = newStr.split('\n').length
+      const diffLines = [
+        ...oldStr.split('\n').map(l => `- ${l}`),
+        ...newStr.split('\n').map(l => `+ ${l}`),
+      ].join('\n')
+
+      return {
+        success: true,
+        output: `已替换 ${path}`,
+        meta: {
+          type: 'edit',
+          path: rawPath,
+          addedLines: newLines,
+          removedLines: oldLines,
+          diff: diffLines,
+        } satisfies ToolResultMeta,
+      }
     } catch (err) {
       return { success: false, output: '', error: err instanceof Error ? err.message : String(err) }
     }

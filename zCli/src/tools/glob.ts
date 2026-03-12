@@ -24,7 +24,7 @@ export class GlobTool implements Tool {
       if (files.length === 0) {
         return { success: true, output: 'No files matched the pattern.' }
       }
-      return { success: true, output: files.join('\n') }
+      return { success: true, output: files.join('\n'), meta: { type: 'glob', fileCount: files.length } }
     } catch (err) {
       return { success: false, output: '', error: err instanceof Error ? err.message : String(err) }
     }

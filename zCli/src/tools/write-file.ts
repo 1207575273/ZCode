@@ -2,7 +2,7 @@
 import { writeFile, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { resolvePath } from '@platform/path-utils.js'
-import type { Tool, ToolContext, ToolResult } from './types.js'
+import type { Tool, ToolContext, ToolResult, ToolResultMeta } from './types.js'
 
 export class WriteFileTool implements Tool {
   readonly name = 'write_file'
@@ -25,7 +25,18 @@ export class WriteFileTool implements Tool {
     try {
       await mkdir(dirname(path), { recursive: true })
       await writeFile(path, content, 'utf-8')
-      return { success: true, output: `已写入 ${path}（${content.length} 字符）` }
+
+      const lines = content.split('\n')
+      return {
+        success: true,
+        output: `已写入 ${path}（${content.length} 字符）`,
+        meta: {
+          type: 'write',
+          path: rawPath,
+          totalLines: lines.length,
+          preview: lines.slice(0, 4).join('\n'),
+        } satisfies ToolResultMeta,
+      }
     } catch (err) {
       return { success: false, output: '', error: err instanceof Error ? err.message : String(err) }
     }

@@ -222,6 +222,7 @@ export function useChat(): UseChatReturn {
                 durationMs: event.durationMs,
                 success: event.success,
                 ...(event.resultSummary !== undefined ? { resultSummary: event.resultSummary } : {}),
+                ...(event.meta !== undefined ? { meta: event.meta } : {}),
               },
             }
             setMessages(prev => [...prev, toolMsg])

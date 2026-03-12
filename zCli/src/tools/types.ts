@@ -21,7 +21,17 @@ export interface ToolResult {
   success: boolean
   output: string
   error?: string
+  /** 结构化元数据，UI 层用于渲染丰富展示（diff 预览、文件行数等） */
+  meta?: ToolResultMeta
 }
+
+/** 工具结果元数据联合类型，按 type 字段区分 */
+export type ToolResultMeta =
+  | { type: 'edit'; path: string; addedLines: number; removedLines: number; diff: string }
+  | { type: 'write'; path: string; totalLines: number; preview: string }
+  | { type: 'read'; path: string; totalLines: number }
+  | { type: 'grep'; matchCount: number; fileCount: number }
+  | { type: 'glob'; fileCount: number }
 
 export interface Tool {
   readonly name: string

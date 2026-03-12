@@ -19,6 +19,7 @@ import { Box, Text } from 'ink'
 import Spinner from 'ink-spinner'
 import { formatDuration, truncate } from './format-utils.js'
 import type { CompletedToolCall } from './ChatView.js'
+import type { ToolResultMeta } from '@tools/types.js'
 
 // ═══════════════════════════════════════════════
 // 类型
@@ -245,13 +246,141 @@ export function SubAgentStatusLine({ event }: { event: SubAgentEvent }) {
 // 历史工具调用渲染（Static 区）
 // ═══════════════════════════════════════════════
 
+/** diff 预览最大行数 */
+const MAX_DIFF_LINES = 8
+/** write 预览最大行数 */
+const MAX_WRITE_PREVIEW_LINES = 4
+
+/**
+ * 根据 meta 生成头部摘要和输出块。
+ * 无 meta 时退回到 resultSummary 做 ⎿ 预览（保持向后兼容）。
+ */
+function buildMetaDisplay(toolCall: CompletedToolCall): { headerSummary: string; outputBlock: React.ReactNode } {
+  const meta = toolCall.meta as ToolResultMeta | undefined
+  if (!meta) {
+    // 无 meta：退回到 resultSummary 预览
+    const { lines, foldHint } = buildOutputPreview(toolCall.resultSummary ?? '')
+    return {
+      headerSummary: '',
+      outputBlock: lines.length > 0 ? (
+        <Box flexDirection="column" paddingLeft={2}>
+          {lines.map((line, i) => (
+            <Box key={i}>
+              <Text dimColor>{i === 0 ? '⎿  ' : '   '}</Text>
+              <Text dimColor>{truncate(line, 120)}</Text>
+            </Box>
+          ))}
+          {foldHint && <Box><Text dimColor>   {foldHint}</Text></Box>}
+        </Box>
+      ) : null,
+    }
+  }
+
+  switch (meta.type) {
+    case 'edit': {
+      // 红绿 diff 行
+      const diffLines = meta.diff.split('\n').filter(l => l.startsWith('+') || l.startsWith('-'))
+      const visible = diffLines.slice(0, MAX_DIFF_LINES)
+      const remaining = diffLines.length - visible.length
+      return {
+        headerSummary: `+${meta.addedLines} -${meta.removedLines}`,
+        outputBlock: visible.length > 0 ? (
+          <Box flexDirection="column" paddingLeft={2}>
+            {visible.map((line, i) => {
+              const isAdd = line.startsWith('+')
+              return (
+                <Box key={i}>
+                  <Text dimColor>{i === 0 ? '⎿  ' : '   '}</Text>
+                  {isAdd
+                    ? <Text color="green">{truncate(line, 120)}</Text>
+                    : <Text dimColor>{truncate(line, 120)}</Text>
+                  }
+                </Box>
+              )
+            })}
+            {remaining > 0 && (
+              <Box><Text dimColor>   ... +{remaining} lines</Text></Box>
+            )}
+          </Box>
+        ) : null,
+      }
+    }
+
+    case 'write': {
+      // 内容预览 + 行数
+      const previewLines = meta.preview.split('\n').slice(0, MAX_WRITE_PREVIEW_LINES)
+      const remaining = meta.totalLines - previewLines.length
+      return {
+        headerSummary: `${meta.totalLines} lines`,
+        outputBlock: previewLines.length > 0 ? (
+          <Box flexDirection="column" paddingLeft={2}>
+            {previewLines.map((line, i) => (
+              <Box key={i}>
+                <Text dimColor>{i === 0 ? '⎿  ' : '   '}</Text>
+                <Text dimColor>{truncate(line, 120)}</Text>
+              </Box>
+            ))}
+            {remaining > 0 && (
+              <Box><Text dimColor>   ... +{remaining} lines</Text></Box>
+            )}
+          </Box>
+        ) : null,
+      }
+    }
+
+    case 'read':
+      // 仅行数摘要，无输出预览
+      return { headerSummary: `${meta.totalLines} lines`, outputBlock: null }
+
+    case 'grep': {
+      // 匹配统计 + resultSummary 做 ⎿ 预览
+      const { lines, foldHint } = buildOutputPreview(toolCall.resultSummary ?? '')
+      return {
+        headerSummary: `${meta.matchCount} matches in ${meta.fileCount} files`,
+        outputBlock: lines.length > 0 ? (
+          <Box flexDirection="column" paddingLeft={2}>
+            {lines.map((line, i) => (
+              <Box key={i}>
+                <Text dimColor>{i === 0 ? '⎿  ' : '   '}</Text>
+                <Text dimColor>{truncate(line, 120)}</Text>
+              </Box>
+            ))}
+            {foldHint && <Box><Text dimColor>   {foldHint}</Text></Box>}
+          </Box>
+        ) : null,
+      }
+    }
+
+    case 'glob': {
+      // 文件数 + resultSummary 做 ⎿ 预览
+      const { lines, foldHint } = buildOutputPreview(toolCall.resultSummary ?? '')
+      return {
+        headerSummary: `${meta.fileCount} files`,
+        outputBlock: lines.length > 0 ? (
+          <Box flexDirection="column" paddingLeft={2}>
+            {lines.map((line, i) => (
+              <Box key={i}>
+                <Text dimColor>{i === 0 ? '⎿  ' : '   '}</Text>
+                <Text dimColor>{truncate(line, 120)}</Text>
+              </Box>
+            ))}
+            {foldHint && <Box><Text dimColor>   {foldHint}</Text></Box>}
+          </Box>
+        ) : null,
+      }
+    }
+
+    default:
+      return { headerSummary: '', outputBlock: null }
+  }
+}
+
 /**
  * ToolHistoryBlock — 已完成的工具调用在历史消息中的渲染。
  *
- * 对标 Claude Code 的历史态工具显示：
- *   Bash(cd "/tmp" && mvn compile -q 2>&1 | tail -5)
- *   ⎿  [INFO] BUILD SUCCESS
- *      ... +15 lines (ctrl+o to expand)
+ * 支持两种模式：
+ * 1. 有 meta 时：根据 meta.type 渲染丰富内容（diff 红绿行、write 预览、行数/匹配统计等）
+ * 2. 无 meta 时：退回到 resultSummary 做 ⎿ 输出预览（向后兼容）
  */
 export function ToolHistoryBlock({ toolCall }: { toolCall: CompletedToolCall }) {
   const name = displayName(toolCall.toolName)
@@ -260,34 +389,22 @@ export function ToolHistoryBlock({ toolCall }: { toolCall: CompletedToolCall }) 
   const icon = toolCall.success ? '✓' : '✗'
   const duration = formatDuration(toolCall.durationMs)
 
-  const { lines: previewLines, foldHint } = buildOutputPreview(toolCall.resultSummary ?? '')
+  // 根据 meta 生成头部摘要和输出内容
+  const { headerSummary, outputBlock } = buildMetaDisplay(toolCall)
 
   return (
     <Box flexDirection="column" paddingLeft={1}>
-      {/* 头部行 */}
+      {/* 头部行：icon + 工具名(参数摘要) + meta 摘要 + 耗时 */}
       <Box>
         <Text color={color}>{icon} </Text>
         <Text color={color} bold>{name}</Text>
         {argsSummary && <Text color={color}>({argsSummary})</Text>}
+        {headerSummary && <Text dimColor>  {headerSummary}</Text>}
         <Text dimColor>  {duration}</Text>
       </Box>
 
-      {/* ⎿ 输出子块 */}
-      {previewLines.length > 0 && (
-        <Box flexDirection="column" paddingLeft={2}>
-          {previewLines.map((line, i) => (
-            <Box key={i}>
-              <Text dimColor>{i === 0 ? '⎿  ' : '   '}</Text>
-              <Text dimColor>{truncate(line, 120)}</Text>
-            </Box>
-          ))}
-          {foldHint && (
-            <Box>
-              <Text dimColor>   {foldHint}</Text>
-            </Box>
-          )}
-        </Box>
-      )}
+      {/* 输出子块 */}
+      {outputBlock}
     </Box>
   )
 }

@@ -15,6 +15,7 @@ import React from 'react'
 import { Box, Static, Text } from 'ink'
 import Spinner from 'ink-spinner'
 import { ToolStatusLine, ToolHistoryBlock, SubAgentStatusLine, type ToolEvent, type SubAgentEvent } from './ToolStatusLine.js'
+import type { ToolResultMeta } from '@tools/types.js'
 
 /** 已完成的工具调用记录，持久化到 messages 历史中 */
 export interface CompletedToolCall {
@@ -23,6 +24,8 @@ export interface CompletedToolCall {
   durationMs: number
   success: boolean
   resultSummary?: string
+  /** 结构化元数据，用于渲染丰富的工具结果展示（diff、文件预览等） */
+  meta?: ToolResultMeta
 }
 
 /** 单条聊天消息的数据结构，与 LLM Message 类型分离（system/tool 仅用于 UI）。 */

@@ -42,24 +42,37 @@ export class GrepTool implements Tool {
       }
 
       const results: string[] = []
+      let totalMatches = 0
+      let matchedFiles = 0
       for (const file of files) {
         if (results.length >= MAX_RESULTS) break
         try {
           const lines = (await readFile(file, 'utf-8')).split('\n')
+          let fileHasMatch = false
           for (let i = 0; i < lines.length; i++) {
             const line = lines[i]!
-            if (regex.test(line) && results.length < MAX_RESULTS) {
-              results.push(`${file}:${i + 1}: ${line}`)
+            if (regex.test(line)) {
+              totalMatches++
+              if (!fileHasMatch) {
+                fileHasMatch = true
+                matchedFiles++
+              }
+              if (results.length < MAX_RESULTS) {
+                results.push(`${file}:${i + 1}: ${line}`)
+              }
             }
           }
         } catch { /* 跳过无法读取的文件 */ }
       }
 
-      if (results.length === 0) return { success: true, output: 'No matches found.' }
+      if (results.length === 0) {
+        return { success: true, output: 'No matches found.', meta: { type: 'grep', matchCount: 0, fileCount: 0 } }
+      }
       const truncated = results.length >= MAX_RESULTS
       return {
         success: true,
         output: results.join('\n') + (truncated ? '\n[结果已截断，仅显示前 50 条]' : ''),
+        meta: { type: 'grep', matchCount: totalMatches, fileCount: matchedFiles },
       }
     } catch (err) {
       return { success: false, output: '', error: err instanceof Error ? err.message : String(err) }
