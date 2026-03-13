@@ -110,14 +110,24 @@ if (args.prompt != null) {
     verbose: args.verbose,
   })
 } else {
-  // 交互模式：启动 Ink REPL
-  const React = await import('react')
-  const { render } = await import('ink')
-  const { App } = await import('../src/ui/App.js')
-  const { getCurrentSessionId, sessionLogger } = await import('../src/ui/useChat.js')
-  const { closeDb } = await import('../src/persistence/index.js')
-  const { leaveAlternateScreen } = await import('../src/ui/terminal-screen.js')
-  const { stopFileWatcher } = await import('../src/core/bootstrap.js')
+  // 交互模式：并行加载所有模块（6 个 dynamic import 同时解析，不串行等待）
+  const [
+    React,
+    { render },
+    { App },
+    { getCurrentSessionId, sessionLogger },
+    { closeDb },
+    { leaveAlternateScreen },
+    { stopFileWatcher },
+  ] = await Promise.all([
+    import('react'),
+    import('ink'),
+    import('../src/ui/App.js'),
+    import('../src/ui/useChat.js'),
+    import('../src/persistence/index.js'),
+    import('../src/ui/terminal-screen.js'),
+    import('../src/core/bootstrap.js'),
+  ])
 
   const { unmount } = render(
     React.createElement(App, {

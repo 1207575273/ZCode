@@ -29,7 +29,8 @@ import { ForkPanel } from './ForkPanel.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
 import { sessionStore, toProjectSlug } from '@persistence/index.js'
 import { tokenMeter } from './useChat.js'
-import { skillStore, ensureSkillsDiscovered, fileIndex, ensureFileIndexReady } from '@core/bootstrap.js'
+import { skillStore, fileIndex, bootstrapAll, getBootstrapStatus, startMcpBackground, getMcpTiming, isDevMode } from '@core/bootstrap.js'
+import type { BootstrapTimings } from '@core/bootstrap.js'
 import { AtResolver } from '@utils/at-resolver.js'
 import { enterAlternateScreen } from './terminal-screen.js'
 import { useTerminalSize } from './useTerminalSize.js'
@@ -164,16 +165,21 @@ export function App({
     }
   }, []) // Only on mount
 
-  // 启动时发现 Skills（幂等），使 / 建议浮层立即可用
+  // 启动时全量并行初始化（Skills / MCP / FileIndex / Instructions / Hooks / SystemPrompt）
+  // 用户看 WelcomeScreen、打字的时间后台全速完成，首次 submit 零等待
   const [skillsReady, setSkillsReady] = useState(false)
-  useEffect(() => {
-    ensureSkillsDiscovered().then(() => setSkillsReady(true))
-  }, [])
-
-  // 启动时初始化文件索引（幂等），使 @ 建议浮层立即可用
   const [fileIndexReady, setFileIndexReady] = useState(false)
+  const [bootTimings, setBootTimings] = useState<BootstrapTimings | null>(null)
+  const [mcpMs, setMcpMs] = useState<number | null>(null)
   useEffect(() => {
-    ensureFileIndexReady().then(() => setFileIndexReady(true))
+    // MCP 后台静默加载，就绪后回调更新 timing 显示
+    startMcpBackground(() => setMcpMs(getMcpTiming()))
+    bootstrapAll().then((result) => {
+      const status = getBootstrapStatus()
+      if (status.skillsReady) setSkillsReady(true)
+      if (status.fileIndexReady) setFileIndexReady(true)
+      if (result.timings) setBootTimings(result.timings)
+    })
   }, [])
 
   // AtResolver 实例（稳定引用）
@@ -459,21 +465,21 @@ export function App({
               }
             })()
             return
-          case 'list_skills':
-            ensureSkillsDiscovered().then(() => {
-              const skills = skillStore.getAll()
-              if (skills.length === 0) {
-                appendSystemMessage('No skills available.')
-              } else {
-                const lines = ['── Available Skills ──', '']
-                for (const s of skills) {
-                  const tag = s.source === 'builtin' ? ' [built-in]' : s.source === 'project' ? ' [project]' : ''
-                  lines.push(`  ${s.name}${tag}  ${s.description}`)
-                }
-                lines.push('', 'Usage: /skills <name> to load a skill')
-                appendSystemMessage(lines.join('\n'))
+          case 'list_skills': {
+            // bootstrapAll 已在 mount 时启动，此时 skills 大概率已就绪
+            const skills = skillStore.getAll()
+            if (skills.length === 0) {
+              appendSystemMessage('No skills available.')
+            } else {
+              const lines = ['── Available Skills ──', '']
+              for (const s of skills) {
+                const tag = s.source === 'builtin' ? ' [built-in]' : s.source === 'project' ? ' [project]' : ''
+                lines.push(`  ${s.name}${tag}  ${s.description}`)
               }
-            })
+              lines.push('', 'Usage: /skills <name> to load a skill')
+              appendSystemMessage(lines.join('\n'))
+            }
+          }
             return
           case 'load_skill':
             skillStore.getContent(action.name).then(content => {
@@ -610,7 +616,23 @@ export function App({
       {started ? (
         <ChatView messages={messages} streamingMessage={streamingMessage} toolEvents={toolEvents} subAgentEvents={subAgentEvents} />
       ) : (
-        <WelcomeScreen model={currentModel} provider={currentProvider} cwd={cwd} recentSessions={recentSessions} />
+        <>
+          {isDevMode && bootTimings && (
+            <Box paddingX={2}>
+              <Text dimColor>
+                {'[dev] bootstrap '}
+                {`${bootTimings.total.toFixed(0)}ms`}
+                {' (skills '}{bootTimings.skills.toFixed(0)}
+                {' → hooks '}{bootTimings.hooks.toFixed(0)}
+                {' → startHooks '}{bootTimings.sessionStartHooks.toFixed(0)}
+                {' | fileIndex '}{bootTimings.fileIndex.toFixed(0)}
+                {' | instructions '}{bootTimings.instructions.toFixed(0)}
+                {'ms) mcp: '}{mcpMs != null ? `${mcpMs.toFixed(0)}ms` : 'loading...'}
+              </Text>
+            </Box>
+          )}
+          <WelcomeScreen model={currentModel} provider={currentProvider} cwd={cwd} recentSessions={recentSessions} />
+        </>
       )}
 
       {error != null && (

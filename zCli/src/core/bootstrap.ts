@@ -219,20 +219,57 @@ export function getSystemPrompt(): string | undefined {
   return cachedSystemPrompt
 }
 
+/** MCP 连接是否已完成（成功或无配置） */
+let mcpReady = false
+/** MCP 后台连接 Promise（供 getMcpStatus 等需要等待的场景使用） */
+let mcpPromise: Promise<void> | null = null
+/** MCP 后台连接耗时（毫秒），仅 dev 模式下记录 */
+let mcpTimingMs = 0
+
 /** 确保 MCP Server 已初始化连接（幂等，只连接一次） */
 export async function ensureMcpInitialized(): Promise<void> {
   if (mcpInitialized) return
   mcpInitialized = true
 
   const config = loadMcpConfigWithSources()
-  if (Object.keys(config.mcpServers).length === 0) return
+  if (Object.keys(config.mcpServers).length === 0) {
+    mcpReady = true
+    return
+  }
 
   mcpManager = new McpManager(config)
   mcpManager.onConnect = (event) => sessionLogger.logMcpConnect(event)
   await mcpManager.connectAll()
+  mcpReady = true
 }
 
-/** 将 MCP 工具注册到 ToolRegistry（需先调用 ensureMcpInitialized） */
+/**
+ * 后台启动 MCP 连接（fire-and-forget，不阻塞任何流程）。
+ * App mount 时调用，用户对话不受 MCP 连接延迟影响。
+ * MCP 就绪后 isMcpReady() 返回 true，submit 时自动注册工具。
+ *
+ * @param onReady 可选回调，MCP 就绪后触发（供 UI 更新 timing 显示）
+ */
+export function startMcpBackground(onReady?: () => void): void {
+  if (mcpPromise) return
+  const t = performance.now()
+  mcpPromise = ensureMcpInitialized().then(() => {
+    mcpTimingMs = performance.now() - t
+    onReady?.()
+  })
+}
+
+/** MCP 是否已连接就绪 */
+export function isMcpReady(): boolean {
+  return mcpReady
+}
+
+/** 获取 MCP 后台连接耗时（毫秒），未完成时返回 0 */
+export function getMcpTiming(): number {
+  return mcpTimingMs
+}
+
+/** 将 MCP 工具注册到 ToolRegistry（MCP 未就绪时静默跳过） */
 export function registerMcpTools(registry: ToolRegistry): void {
   if (mcpManager != null) {
     for (const tool of mcpManager.getTools()) {
@@ -241,9 +278,115 @@ export function registerMcpTools(registry: ToolRegistry): void {
   }
 }
 
-/** 获取 MCP Server 状态信息（/mcp 指令用） */
+/** 获取 MCP Server 状态信息（/mcp 指令用，会等待连接完成） */
 export async function getMcpStatus() {
-  await ensureMcpInitialized()
+  if (mcpPromise) await mcpPromise
+  else await ensureMcpInitialized()
   if (mcpManager == null) return []
   return mcpManager.getStatus()
+}
+
+// ═══ 统一启动编排 ═══
+
+/**
+ * bootstrapAll() 返回结果，供调用方判断各子系统就绪状态。
+ */
+export interface BootstrapResult {
+  /** Skills 是否已发现 */
+  skillsReady: boolean
+  /** 文件索引是否已就绪 */
+  fileIndexReady: boolean
+  /** System Prompt 是否已构建 */
+  systemPromptReady: boolean
+  /** 各模块耗时（毫秒），仅 dev 模式填充 */
+  timings?: BootstrapTimings
+}
+
+/** 各模块启动耗时（毫秒），MCP 后台独立加载不计入 */
+export interface BootstrapTimings {
+  skills: number
+  instructions: number
+  hooks: number
+  sessionStartHooks: number
+  systemPrompt: number
+  fileIndex: number
+  total: number
+}
+
+let bootstrapPromise: Promise<BootstrapResult> | null = null
+
+/** 是否 dev 模式（tsx 直接跑 .ts 文件） */
+export const isDevMode = (process.argv[1] ?? '').endsWith('.ts')
+
+/**
+ * 统一启动编排 — 按依赖拓扑最大化并行（幂等，多次调用返回同一 Promise）。
+ *
+ * 两条独立链路并行执行，总耗时 = max(链A, 链B)：
+ * - 链 A：Skills → Instructions → Hooks → SessionStartHooks → SystemPrompt
+ * - 链 B：文件索引扫描（磁盘 IO）
+ *
+ * MCP 不在此编排内 — 通过 startMcpBackground() 后台静默加载，
+ * 不阻塞启动和首次对话，就绪后 submit 时自动注册工具。
+ */
+export function bootstrapAll(): Promise<BootstrapResult> {
+  if (bootstrapPromise) return bootstrapPromise
+
+  bootstrapPromise = (async (): Promise<BootstrapResult> => {
+    const t0 = performance.now()
+    const timings: Record<string, number> = {}
+
+    await Promise.all([
+      // 链 A：Skills → Hooks → SessionStartHooks → SystemPrompt（串行依赖链）
+      (async () => {
+        let t = performance.now()
+        await ensureSkillsDiscovered()
+        timings['skills'] = performance.now() - t
+
+        t = performance.now()
+        ensureInstructionsLoaded()
+        timings['instructions'] = performance.now() - t
+
+        t = performance.now()
+        await ensureHooksDiscovered()
+        timings['hooks'] = performance.now() - t
+
+        t = performance.now()
+        const hookContext = await runSessionStartHooks('startup')
+        timings['sessionStartHooks'] = performance.now() - t
+
+        t = performance.now()
+        buildSystemPrompt(hookContext)
+        timings['systemPrompt'] = performance.now() - t
+      })(),
+      // 链 B：文件索引扫描（磁盘 IO，完全独立）
+      (async () => {
+        const t = performance.now()
+        await ensureFileIndexReady()
+        timings['fileIndex'] = performance.now() - t
+      })(),
+    ])
+
+    timings['total'] = performance.now() - t0
+
+    return {
+      skillsReady: true,
+      fileIndexReady: true,
+      systemPromptReady: true,
+      ...(isDevMode ? { timings: timings as unknown as BootstrapTimings } : {}),
+    }
+  })()
+
+  return bootstrapPromise
+}
+
+/**
+ * 获取 bootstrap 进度的同步快照（供 UI 渲染判断各子系统是否就绪）。
+ * 不触发初始化，只读取当前状态。
+ */
+export function getBootstrapStatus() {
+  return {
+    skillsReady: skillStore.isDiscovered(),
+    fileIndexReady,
+    systemPromptReady: cachedSystemPrompt !== undefined,
+  }
 }

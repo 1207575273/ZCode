@@ -18,11 +18,10 @@ import { createProvider } from '@providers/registry.js'
 import { AgentLoop, isAbortError } from '@core/agent-loop.js'
 import {
   sessionLogger, tokenMeter, getCurrentSessionId,
-  buildRegistry, ensureMcpInitialized, registerMcpTools, getMcpStatus,
-  ensureSkillsDiscovered, skillStore,
-  ensureInstructionsLoaded,
-  ensureHooksDiscovered, runSessionStartHooks, hookManager,
-  buildSystemPrompt, getSystemPrompt,
+  buildRegistry, registerMcpTools, getMcpStatus,
+  hookManager,
+  getSystemPrompt,
+  bootstrapAll,
 } from '@core/bootstrap.js'
 import type { ChatMessage } from './ChatView.js'
 import type { Message } from '@core/types.js'
@@ -205,16 +204,10 @@ export function useChat(): UseChatReturn {
         if (sid) tokenMeter.bind(sid, currentProvider, currentModel)
         sessionLogger.logUserMessage(text)
 
-        // 初始化 Skills、Hooks、MCP、指令文件（幂等）
-        await ensureSkillsDiscovered()
-        await ensureHooksDiscovered()
-        await ensureMcpInitialized()
+        // 等待核心模块就绪（App mount 时已启动，此处大概率已完成）
+        // MCP 后台加载，已就绪则注册工具，未就绪不阻塞对话
+        await bootstrapAll()
         registerMcpTools(registry)
-        ensureInstructionsLoaded()
-
-        // 构建 system prompt（幂等，一次构建全程复用，利用 LLM cache 前缀命中）
-        const hookContext = await runSessionStartHooks('startup')
-        buildSystemPrompt(hookContext)
         const systemPrompt = getSystemPrompt()
 
         const loop = new AgentLoop(provider, registry, {

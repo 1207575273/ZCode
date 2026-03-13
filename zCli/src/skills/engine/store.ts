@@ -47,6 +47,10 @@ export class SkillStore {
   /** 已发现的 skills（按名称去重，高优先级覆盖） */
   #skills = new Map<string, SkillMetadata>()
   #discovered = false
+
+  /** 是否已完成发现 */
+  isDiscovered(): boolean { return this.#discovered }
+
   /** 已发现的插件目录列表 */
   #pluginDirs: string[] = []
 
