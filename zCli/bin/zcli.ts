@@ -117,6 +117,7 @@ if (args.prompt != null) {
   const { getCurrentSessionId, sessionLogger } = await import('../src/ui/useChat.js')
   const { closeDb } = await import('../src/persistence/index.js')
   const { leaveAlternateScreen } = await import('../src/ui/terminal-screen.js')
+  const { stopFileWatcher } = await import('../src/core/bootstrap.js')
 
   const { unmount } = render(
     React.createElement(App, {
@@ -150,6 +151,7 @@ if (args.prompt != null) {
   }
 
   function exitGracefully() {
+    stopFileWatcher()
     sessionLogger.finalize()
     closeDb()
     unmount()

@@ -29,9 +29,12 @@ import { ForkPanel } from './ForkPanel.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
 import { sessionStore, toProjectSlug } from '@persistence/index.js'
 import { tokenMeter } from './useChat.js'
-import { skillStore, ensureSkillsDiscovered } from '@core/bootstrap.js'
+import { skillStore, ensureSkillsDiscovered, fileIndex, ensureFileIndexReady } from '@core/bootstrap.js'
+import { AtResolver } from '@utils/at-resolver.js'
 import { enterAlternateScreen } from './terminal-screen.js'
 import { useTerminalSize } from './useTerminalSize.js'
+import { AtSuggestion, createSearchItem, createBrowseItem } from './AtSuggestion.js'
+import type { AtSuggestionItem } from './AtSuggestion.js'
 
 /**
  * App — ZCli 根组件
@@ -96,6 +99,10 @@ export function App({
   const suggestionIndexRef = useRef(0)
   // suggestionsRef: handleSubmit 内读取最新建议列表（避免 useCallback 闭包陈旧）
   const suggestionsRef = useRef<SuggestionItem[]>([])
+  // @ 文件建议浮层状态
+  const [atSuggestionIndex, setAtSuggestionIndex] = useState(0)
+  const atSuggestionIndexRef = useRef(0)
+  const atSuggestionsRef = useRef<AtSuggestionItem[]>([])
   /** /mcp 面板是否正在加载中 */
   const [mcpLoading, setMcpLoading] = useState(false)
   /** /resume 面板是否显示 */
@@ -163,6 +170,15 @@ export function App({
     ensureSkillsDiscovered().then(() => setSkillsReady(true))
   }, [])
 
+  // 启动时初始化文件索引（幂等），使 @ 建议浮层立即可用
+  const [fileIndexReady, setFileIndexReady] = useState(false)
+  useEffect(() => {
+    ensureFileIndexReady().then(() => setFileIndexReady(true))
+  }, [])
+
+  // AtResolver 实例（稳定引用）
+  const atResolver = useMemo(() => new AtResolver(cwd), [cwd])
+
   // CommandRegistry — 当 provider/model 变化时重建，确保 /model 指令能感知当前状态
   const registry = useMemo(() => {
     const reg = new CommandRegistry()
@@ -210,17 +226,47 @@ export function App({
   }, [inputValue, registry, skillsReady])
   suggestionsRef.current = suggestions
 
+  // atSuggestions: 检测输入中最近的 @ 触发，驱动文件建议浮层
+  // 两种模式：
+  // - 浏览模式：query 为空或以 "/" 结尾 → listEntries() 展示目录内容
+  // - 搜索模式：query 有文本 → search() 模糊匹配
+  const atSuggestions: AtSuggestionItem[] = useMemo(() => {
+    if (!fileIndexReady) return []
+    const text = inputValue
+    const idx = text.lastIndexOf('@')
+    if (idx === -1) return []
+    const before = idx === 0 ? ' ' : text[idx - 1]
+    if (!before || !/\s/.test(before)) return []
+    const after = text.slice(idx + 1)
+    if (/\s/.test(after)) return []
+
+    const query = after
+    // 浏览模式：刚输入 @ 或 @dir/
+    if (query.length === 0 || query.endsWith('/')) {
+      const dirPrefix = query // "" 或 "src/" 等
+      return fileIndex.listEntries(dirPrefix, 30).map(e =>
+        createBrowseItem(e.name, e.fullPath, e.isDir)
+      )
+    }
+    // 搜索模式：模糊匹配
+    return fileIndex.search(query, 20).map(r => createSearchItem(r.path))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputValue, fileIndexReady])
+  atSuggestionsRef.current = atSuggestions
+
   // inputValue 变化时重置高亮索引，避免越界
   useEffect(() => {
     setSuggestionIndex(0)
-    suggestionIndexRef.current = 0  // 同步 ref，供 useInput 闭包读取
+    suggestionIndexRef.current = 0
+    setAtSuggestionIndex(0)
+    atSuggestionIndexRef.current = 0
   }, [inputValue])
 
   const handleSubmit = useCallback((input: string) => {
     setInputValue('')
     let trimmed = input.trim()
 
-    // 建议浮层可见时，使用当前选中的建议项替代原始输入
+    // / 建议浮层可见时，使用当前选中的建议项替代原始输入
     // （用户可能只输入了 / 或 /h，但方向键选中了 /hello-world）
     // 必须在 guard 之前，否则纯 "/" 输入会被提前过滤
     const activeSuggestions = suggestionsRef.current
@@ -228,6 +274,28 @@ export function App({
       const selected = activeSuggestions[suggestionIndexRef.current]
       if (selected) {
         trimmed = '/' + selected.name
+      }
+    }
+
+    // @ 建议浮层可见时，Enter 行为：
+    // - 选中目录 → 导航进入（追加目录路径，不加空格）
+    // - 选中文件 → 补全完整路径并加空格
+    const activeAtSuggestions = atSuggestionsRef.current
+    if (activeAtSuggestions.length > 0 && activeSuggestions.length === 0) {
+      const selected = activeAtSuggestions[atSuggestionIndexRef.current]
+      if (selected) {
+        const atIdx = input.lastIndexOf('@')
+        if (atIdx !== -1) {
+          if (selected.isDir) {
+            // 目录：导航进入，@ 后跟完整目录路径
+            setInputValue(input.slice(0, atIdx) + '@' + selected.path)
+          } else {
+            // 文件：补全路径 + 空格，结束 @ 模式
+            setInputValue(input.slice(0, atIdx) + '@' + selected.path + ' ')
+          }
+          setInputResetKey(k => k + 1)
+          return
+        }
       }
     }
 
@@ -430,8 +498,12 @@ export function App({
       hasClearedRef.current = true
       enterAlternateScreen()
     }
-    submit(trimmed)
-  }, [registry, clearMessages, appendSystemMessage, switchModel, submit, modelItems, exit, getMcpInfo])
+
+    // @ 文件引用解析：如果输入包含 @path 引用，在消息前注入 file-references context
+    const { context, rawInput } = atResolver.resolve(trimmed)
+    const finalMessage = context ? `${context}\n\n${rawInput}` : rawInput
+    submit(finalMessage)
+  }, [registry, clearMessages, appendSystemMessage, switchModel, submit, modelItems, exit, getMcpInfo, atResolver])
 
   // 建议浮层按键：Arrow 导航、Tab 补全、Enter 提交选中项、Escape 取消
   useInput((_input, key) => {
@@ -462,6 +534,43 @@ export function App({
       setInputValue('')
     }
   }, { isActive: suggestions.length > 0 })
+
+  // @ 文件建议浮层按键：Arrow 导航、Tab 补全文件路径
+  useInput((_input, key) => {
+    if (key.upArrow) {
+      setAtSuggestionIndex(i => {
+        const next = i <= 0 ? atSuggestions.length - 1 : i - 1
+        atSuggestionIndexRef.current = next
+        return next
+      })
+    }
+    if (key.downArrow) {
+      setAtSuggestionIndex(i => {
+        const next = i >= atSuggestions.length - 1 ? 0 : i + 1
+        atSuggestionIndexRef.current = next
+        return next
+      })
+    }
+    // Tab: 补全选中项 — 目录导航进入，文件补全路径
+    if (key.tab) {
+      const item = atSuggestions[atSuggestionIndexRef.current]
+      if (item) {
+        const text = inputValue
+        const atIdx = text.lastIndexOf('@')
+        if (atIdx !== -1) {
+          if (item.isDir) {
+            setInputValue(text.slice(0, atIdx) + '@' + item.path)
+          } else {
+            setInputValue(text.slice(0, atIdx) + '@' + item.path + ' ')
+          }
+          setInputResetKey(k => k + 1)
+        }
+      }
+    }
+    if (key.escape) {
+      setInputValue('')
+    }
+  }, { isActive: atSuggestions.length > 0 && suggestions.length === 0 })
 
   // ModelPicker Esc 保险：在 App 层面直接监听 Esc。
   // useCallback 空依赖使 handler 引用永远稳定 → Ink 不会重复注册/注销，
@@ -605,6 +714,10 @@ export function App({
 
       {suggestions.length > 0 && (
         <CommandSuggestion items={suggestions} selectedIndex={suggestionIndex} />
+      )}
+
+      {atSuggestions.length > 0 && suggestions.length === 0 && (
+        <AtSuggestion items={atSuggestions} selectedIndex={atSuggestionIndex} />
       )}
     </Box>
   )

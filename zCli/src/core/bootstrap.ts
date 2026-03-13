@@ -27,6 +27,7 @@ import { SkillTool } from '@skills/engine/skill-tool.js'
 import { loadInstructions, formatInstructionsPrompt } from '@config/instructions-loader.js'
 import type { LoadedInstruction } from '@config/instructions-loader.js'
 import { HookManager } from '@hooks/hook-manager.js'
+import { FileIndex, FileWatcher, createIgnoreFilter } from '@file-index/index.js'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 
@@ -136,6 +137,34 @@ export async function runSessionStartHooks(trigger: string): Promise<string> {
     }
   }
   return contexts.join('\n\n')
+}
+
+// ═══ 文件索引（@ Mention 用） ═══
+
+/** 模块级 FileIndex 实例 */
+export const fileIndex = new FileIndex(process.cwd())
+
+let fileIndexReady = false
+let fileWatcher: FileWatcher | null = null
+
+/**
+ * 初始化文件索引：全量扫描 + 启动监听（幂等）。
+ * 异步执行，不阻塞首帧渲染。
+ */
+export async function ensureFileIndexReady(): Promise<void> {
+  if (fileIndexReady) return
+  fileIndexReady = true
+
+  await fileIndex.scan()
+
+  const ig = createIgnoreFilter(process.cwd())
+  fileWatcher = new FileWatcher(process.cwd(), fileIndex, ig)
+  fileWatcher.start()
+}
+
+/** 停止文件监听（app 退出时调用） */
+export function stopFileWatcher(): void {
+  fileWatcher?.stop()
 }
 
 // ═══ 指令文件（ZCLI.md / CLAUDE.md） ═══

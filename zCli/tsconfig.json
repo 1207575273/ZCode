@@ -27,7 +27,9 @@
       "@mcp/*": ["src/mcp/*"],
       "@skills/*": ["src/skills/*"],
       "@hooks": ["src/hooks/index.ts"],
-      "@hooks/*": ["src/hooks/*"]
+      "@hooks/*": ["src/hooks/*"],
+      "@file-index": ["src/file-index/index.ts"],
+      "@file-index/*": ["src/file-index/*"]
     },
     "outDir": "dist",
     "rootDir": ".",

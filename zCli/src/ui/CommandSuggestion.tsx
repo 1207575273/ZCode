@@ -81,7 +81,7 @@ export function CommandSuggestion({ items, selectedIndex }: CommandSuggestionPro
             }
             <Text color={isSelected ? 'cyan' : 'green'}>{padded}</Text>
             {sourceTag && <Text color={isSelected ? 'cyan' : 'yellow'}>{sourceTag}</Text>}
-            <Text color={isSelected ? 'cyan' : undefined} dimColor={!isSelected}>{item.description}</Text>
+            <Text {...(isSelected ? { color: 'cyan' } : { dimColor: true })}>{item.description}</Text>
           </Box>
         )
       })}
