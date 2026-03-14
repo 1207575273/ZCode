@@ -29,7 +29,7 @@ import { ForkPanel } from './ForkPanel.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
 import { sessionStore, toProjectSlug } from '@persistence/index.js'
 import { tokenMeter } from './useChat.js'
-import { skillStore, fileIndex, bootstrapAll, getBootstrapStatus, startMcpBackground, getMcpTiming, isDevMode } from '@core/bootstrap.js'
+import { skillStore, fileIndex, bootstrapAll, getBootstrapStatus, startMcpBackground, getMcpTiming, isDevMode, getCurrentSessionId } from '@core/bootstrap.js'
 import type { BootstrapTimings } from '@core/bootstrap.js'
 import { AtResolver } from '@utils/at-resolver.js'
 import { enterAlternateScreen } from './terminal-screen.js'
@@ -53,6 +53,7 @@ interface AppProps {
   cwd?: string
   resumeSessionId?: string | undefined
   showResumeOnStart?: boolean | undefined
+  webEnabled?: boolean | undefined
 }
 
 export function App({
@@ -61,6 +62,7 @@ export function App({
   cwd = process.cwd(),
   resumeSessionId,
   showResumeOnStart,
+  webEnabled,
 }: AppProps) {
   const { exit } = useApp()
   // 订阅终端尺寸变化：debounce + 清屏，避免 Ink 差分渲染残留
@@ -628,6 +630,16 @@ export function App({
                 {' | fileIndex '}{bootTimings.fileIndex.toFixed(0)}
                 {' | instructions '}{bootTimings.instructions.toFixed(0)}
                 {'ms) mcp: '}{mcpMs != null ? `${mcpMs.toFixed(0)}ms` : 'loading...'}
+              </Text>
+            </Box>
+          )}
+          {webEnabled && (
+            <Box paddingX={2}>
+              <Text dimColor>
+                {'Web UI: '}
+              </Text>
+              <Text color="cyan">
+                {`http://localhost:9800/session/${getCurrentSessionId() ?? ''}`}
               </Text>
             </Box>
           )}

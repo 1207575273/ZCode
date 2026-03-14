@@ -155,20 +155,10 @@ if (args.prompt != null) {
       ...(args.showResumeOnStart ? { showResumeOnStart: true } : {}),
       ...(args.model != null ? { model: args.model } : {}),
       ...(args.provider != null ? { provider: args.provider } : {}),
+      ...(args.web ? { webEnabled: true } : {}),
     }),
     { exitOnCtrlC: false },
   )
-
-  // render 后 useChat 已 mount，session 已创建，输出 Web UI 地址（bootstrap 信息上方）
-  if (args.web) {
-    setTimeout(() => {
-      const sid = getCurrentSessionId()
-      const url = sid
-        ? `http://localhost:9800/session/${sid}`
-        : `http://localhost:9800`
-      process.stderr.write(`Web UI: ${url}\n`)
-    }, 50)
-  }
 
   /** 检测启动方式，生成对应的 resume 命令 */
   function getResumeCommand(sessionId: string): string {
