@@ -89,13 +89,35 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
   // 健康检查
   app.get('/api/health', (c) => c.json({ status: 'ok', clients: wsClients.size }))
 
-  // 静态资源托管 / dev 重定向
+  // 静态资源：dev 模式反向代理 Vite，生产模式托管构建产物
   const isDev = options.dev ?? false
   const distDir = join(import.meta.dirname ?? '.', '../../dashboard-ui/dist')
 
   if (isDev) {
-    // dev 模式：根路径重定向到 Vite dev server
-    app.get('/', (c) => c.redirect(`http://localhost:${VITE_DEV_PORT}`))
+    // dev 模式：反向代理到 Vite dev server，9800 一个端口搞定
+    app.all('*', async (c) => {
+      const url = new URL(c.req.url)
+      const viteUrl = `http://localhost:${VITE_DEV_PORT}${url.pathname}${url.search}`
+      try {
+        const isBodyless = c.req.method === 'GET' || c.req.method === 'HEAD'
+        const init: RequestInit = {
+          method: c.req.method,
+          headers: c.req.raw.headers,
+        }
+        if (!isBodyless && c.req.raw.body) {
+          // Node fetch 接受 ReadableStream 作为 body
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          init.body = c.req.raw.body as any
+        }
+        const resp = await fetch(viteUrl, init)
+        return new Response(resp.body, {
+          status: resp.status,
+          headers: resp.headers,
+        })
+      } catch {
+        return c.text('Vite dev server 未就绪，请稍等...', 502)
+      }
+    })
   } else if (existsSync(distDir)) {
     // 生产模式：托管 dashboard-ui 构建产物
     app.use('/*', serveStatic({ root: distDir }))

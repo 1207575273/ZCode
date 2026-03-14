@@ -147,7 +147,7 @@ if (args.prompt != null) {
       process.on('exit', () => { viteProcess.kill() })
     }
 
-    const webUrl = isDevMode ? `http://localhost:5173` : `http://localhost:${bridge.port}`
+    const webUrl = `http://localhost:${bridge.port}`
     process.stderr.write(`Web UI: ${webUrl}\n`)
   }
 

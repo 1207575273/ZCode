@@ -5,9 +5,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    proxy: {
-      '/ws': { target: 'ws://localhost:9800', ws: true },
-      '/api': { target: 'http://localhost:9800' },
+    // HMR 通过 Vite 直连（Bridge Server 不代理 HMR WebSocket）
+    hmr: {
+      port: 5173,
     },
   },
   build: {
