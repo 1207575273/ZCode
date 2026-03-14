@@ -29,7 +29,8 @@
       "@hooks": ["src/hooks/index.ts"],
       "@hooks/*": ["src/hooks/*"],
       "@file-index": ["src/file-index/index.ts"],
-      "@file-index/*": ["src/file-index/*"]
+      "@file-index/*": ["src/file-index/*"],
+      "@web/*": ["src/web/*"]
     },
     "outDir": "dist",
     "rootDir": ".",
