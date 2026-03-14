@@ -118,6 +118,25 @@ export function ChatPage() {
   }
 
   const handleSubmit = useCallback((text: string) => {
+    // 流式中发新消息 → 先中止当前回复，再提交（与 CLI interruptAndSubmit 行为一致）
+    if (isStreaming) {
+      // 将已有流式内容固化为部分回复
+      setStreaming(prev => {
+        if (prev) {
+          setMessages(msgs => [...msgs, {
+            id: `msg-${++msgIdCounter.current}`,
+            role: 'assistant' as const,
+            content: prev + '\n\n*(已中断)*',
+          }])
+        }
+        return ''
+      })
+      setToolEvents([])
+      setPendingPermission(null)
+      setPendingQuestions(null)
+      send({ type: 'abort' })
+    }
+
     setMessages(prev => [...prev, {
       id: `msg-${++msgIdCounter.current}`,
       role: 'user' as const,
@@ -126,8 +145,9 @@ export function ChatPage() {
     }])
     setStreaming('')
     setIsStreaming(true)
-    send({ type: 'chat', text })
-  }, [send])
+    // 短暂延迟让 abort 先到达 CLI，再发新消息
+    setTimeout(() => send({ type: 'chat', text }), 50)
+  }, [send, isStreaming])
 
   const handlePermission = useCallback((allow: boolean) => {
     send({ type: 'permission', allow })
@@ -144,7 +164,7 @@ export function ChatPage() {
     setPendingQuestions(null)
   }, [send])
 
-  const inputDisabled = !connected || isStreaming
+  const inputDisabled = !connected
 
   return (
     <div className="flex flex-col h-screen">
