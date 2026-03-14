@@ -57,12 +57,14 @@
     "marked": "^17.0.4",
     "react": "^18.3.1",
     "uuid": "^13.0.0",
+    "ws": "^8.19.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/marked": "^6.0.0",
     "@types/node": "^25.3.3",
     "@types/react": "^18.3.28",
+    "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.0.18",
     "ink-testing-library": "^4.0.0",
     "tsup": "^8.5.1",

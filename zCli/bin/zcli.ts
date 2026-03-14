@@ -132,33 +132,41 @@ if (args.prompt != null) {
     import('../src/core/bootstrap.js'),
   ])
 
-  // 若指定 --web 则启动 Bridge Server + Vite dev server，将终端 UI 与 Web UI 桥接
+  // 若指定 --web 则启动/连接 Bridge Server
   if (args.web) {
-    // 检测端口是否已被占用（另一个 ZCli 实例已启动 Bridge Server）
-    const { createServer } = await import('node:net')
+    const { startBridgeServer, connectBridge, disconnectBridge } = await import('../src/bridge/index.js')
+
+    // 检测端口是否已被占用
+    const { createServer: createNetServer } = await import('node:net')
     const portInUse = await new Promise<boolean>((resolve) => {
-      const tester = createServer()
+      const tester = createNetServer()
       tester.once('error', () => resolve(true))
       tester.once('listening', () => { tester.close(); resolve(false) })
       tester.listen(9800)
     })
 
-    if (portInUse) {
-      process.stderr.write('Bridge Server 已在运行 (port 9800)，复用已有实例\n')
-    } else {
-      const { startBridgeServer } = await import('../src/bridge/index.js')
+    if (!portInUse) {
+      // 第一个 CLI：启动 Bridge Server + Vite
       const isDevMode = (process.argv[1] ?? '').endsWith('.ts')
       startBridgeServer({ dev: isDevMode })
 
       if (isDevMode) {
-        // dev 模式：自动启动 Vite dev server（后台子进程）
         const { execa } = await import('execa')
-        const dashboardDir = new URL('../web', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')
-        const viteProcess = execa('npx', ['vite'], { cwd: dashboardDir, stdio: 'ignore' })
+        const webDir = new URL('../web', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')
+        const viteProcess = execa('npx', ['vite'], { cwd: webDir, stdio: 'ignore' })
         viteProcess.catch(() => { /* Vite 退出时静默 */ })
         process.on('exit', () => { viteProcess.kill() })
       }
     }
+
+    // 所有 CLI（包括第一个）都作为 WS 客户端连接 Bridge
+    // render 后才有 sessionId（useChat mount 时创建），用 setTimeout 等待
+    setTimeout(() => {
+      const sid = getCurrentSessionId()
+      if (sid) connectBridge(9800, sid)
+    }, 100)
+
+    process.on('exit', disconnectBridge)
   }
 
   const { unmount } = render(

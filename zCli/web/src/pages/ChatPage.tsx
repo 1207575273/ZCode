@@ -15,7 +15,7 @@ interface ChatPageProps {
 }
 
 export function ChatPage({ targetSessionId }: ChatPageProps) {
-  const { connected, lastEvent, send } = useWebSocket()
+  const { connected, lastEvent, send } = useWebSocket({ sessionId: targetSessionId })
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [sessionModel, setSessionModel] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -128,6 +128,13 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         setPendingQuestions(null)
         break
       }
+      case 'bridge_stop':
+        setMessages(prev => [...prev, {
+          id: `msg-${++msgIdCounter.current}`,
+          role: 'system',
+          content: 'Bridge Server 已关闭',
+        }])
+        break
       case 'error':
         setStreaming('')
         setIsStreaming(false)
