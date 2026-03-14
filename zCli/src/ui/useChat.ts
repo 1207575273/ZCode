@@ -159,7 +159,7 @@ export function useChat(): UseChatReturn {
    * 发送用户消息并启动 AgentLoop。
    * system 消息在构建 history 前被过滤，不发送给 LLM。
    */
-  const submit = useCallback((text: string) => {
+  const submit = useCallback((text: string, _source: 'cli' | 'web' = 'cli') => {
     if (isStreaming) return
 
     const config = configManager.load()
@@ -184,7 +184,10 @@ export function useChat(): UseChatReturn {
       .map(m => ({ role: m.role, content: m.content }))
 
     setMessages(prev => [...prev, userMsg])
-    eventBus.emit({ type: 'user_input', text, source: 'cli' })
+    // 只有 CLI 端直接输入时广播（Web 端触发的 submit 已由 EventBus 广播过）
+    if (_source === 'cli') {
+      eventBus.emit({ type: 'user_input', text, source: 'cli' })
+    }
     setStreamingMessage('')
     toolEventsRef.current = []
     setToolEvents([])
@@ -456,7 +459,7 @@ export function useChat(): UseChatReturn {
   useEffect(() => {
     const off = eventBus.onType('user_input', (event) => {
       if (event.source === 'web' && event.text !== '__abort__') {
-        submit(event.text)
+        submit(event.text, 'web')
       }
     })
     return off

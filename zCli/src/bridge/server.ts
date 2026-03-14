@@ -131,6 +131,8 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
     // 内部管理事件不推送给浏览器
     if (event.type === 'client_connect' || event.type === 'client_disconnect') return
     if (event.type === 'permission_response') return
+    // Web 端自己发的 user_input 不 echo 回去（Web 端本地已显示）
+    if (event.type === 'user_input' && event.source === 'web') return
 
     // AgentEvent 需要序列化（去除回调函数），BridgeEvent（user_input）直接序列化
     const serializable = isAgentEvent(event) ? toSerializableEvent(event) : event

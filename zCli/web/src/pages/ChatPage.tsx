@@ -97,6 +97,15 @@ export function ChatPage() {
   }
 
   const handleSubmit = useCallback((text: string) => {
+    // 本地立即添加用户消息（不等服务端 echo）
+    setMessages(prev => [...prev, {
+      id: `msg-${++msgIdCounter.current}`,
+      role: 'user' as const,
+      content: text,
+      source: 'web' as const,
+    }])
+    setStreaming('')
+    setIsStreaming(true)
     send({ type: 'chat', text })
   }, [send])
 
