@@ -43,13 +43,14 @@ interface CliArgs {
   noTools: boolean
   json: boolean
   verbose: boolean
+  web: boolean
 }
 
 function parseArgs(argv: string[]): CliArgs {
   const result: CliArgs = {
     prompt: null, model: null, provider: null,
     resumeSessionId: undefined, showResumeOnStart: false,
-    yes: false, noTools: false, json: false, verbose: false,
+    yes: false, noTools: false, json: false, verbose: false, web: false,
   }
 
   const positional: string[] = []
@@ -78,6 +79,8 @@ function parseArgs(argv: string[]): CliArgs {
       result.json = true
     } else if (arg === '--verbose' || arg === '-v') {
       result.verbose = true
+    } else if (arg === '--web') {
+      result.web = true
     } else if (!arg.startsWith('-')) {
       positional.push(arg)
     }
@@ -128,6 +131,13 @@ if (args.prompt != null) {
     import('../src/ui/terminal-screen.js'),
     import('../src/core/bootstrap.js'),
   ])
+
+  // 若指定 --web 则启动 Bridge Server，将终端 UI 与 Web UI 桥接
+  if (args.web) {
+    const { startBridgeServer } = await import('../src/web/index.js')
+    const bridge = startBridgeServer()
+    process.stderr.write(`Web UI: http://localhost:${bridge.port}\n`)
+  }
 
   const { unmount } = render(
     React.createElement(App, {
