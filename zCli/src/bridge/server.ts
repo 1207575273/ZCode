@@ -174,7 +174,18 @@ function routeMessage(senderId: string, msg: { type: string; [key: string]: unkn
     // ── 注册消息：CLI/Web 连接后第一条消息，声明身份和 session ──
     case 'register': {
       sender.clientType = (msg['clientType'] as 'cli' | 'web') ?? 'web'
-      sender.sessionId = String(msg['sessionId'] ?? '')
+      let sid = String(msg['sessionId'] ?? '')
+
+      // Web 注册空 sessionId 时，自动分配第一个活跃的 CLI session
+      if (sender.clientType === 'web' && !sid) {
+        for (const cl of clients.values()) {
+          if (cl.clientType === 'cli' && cl.sessionId) {
+            sid = cl.sessionId
+            break
+          }
+        }
+      }
+      sender.sessionId = sid
 
       // Web 客户端注册时推送历史消息
       if (sender.clientType === 'web' && sender.sessionId) {
