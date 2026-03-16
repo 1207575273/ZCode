@@ -15,11 +15,12 @@ export interface UserQuestion {
   placeholder?: string
 }
 
-/** 历史消息（session JSONL 还原） */
+/** 历史消息（session JSONL 还原，含工具执行记录） */
 export interface SessionMessage {
   id: string
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'system'
   content: string
+  toolEvents?: ToolEvent[]
 }
 
 /** 服务端推送的事件 */

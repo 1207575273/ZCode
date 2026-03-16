@@ -102,6 +102,11 @@ export class SessionStore {
     let cwd = ''
     const messages: SessionSnapshot['messages'] = []
 
+    // 收集工具事件：tool_call_start 的 args + tool_call_end 的结果
+    const toolStartArgs = new Map<string, Record<string, unknown>>()
+    // 本轮积累的已完成工具记录（在 assistant 消息前插入）
+    let pendingTools: SessionSnapshot['messages'][0]['toolEvents'] = []
+
     for (const event of path) {
       if (event.type === 'session_start' || event.type === 'session_resume') {
         if (event.provider) provider = event.provider
@@ -109,17 +114,47 @@ export class SessionStore {
         if (event.cwd) cwd = event.cwd
       }
 
-      if (
-        (event.type === 'user' || event.type === 'assistant') &&
-        event.message &&
-        typeof event.message.content === 'string'
-      ) {
-        messages.push({
-          id: event.uuid,
-          role: event.type,
-          content: event.message.content,
-        })
+      // 记录 tool_call_start 的 args（tool_call_end 里没有 args）
+      if (event.type === 'tool_call_start' && event.toolCallId && event.toolName) {
+        toolStartArgs.set(event.toolCallId, event.args ?? {})
       }
+
+      // 收集已完成的工具记录
+      if (event.type === 'tool_call_end' && event.toolCallId && event.toolName) {
+        if (!pendingTools) pendingTools = []
+        const toolEvt: import('./session-types.js').SnapshotToolEvent = {
+          toolCallId: event.toolCallId,
+          toolName: event.toolName,
+          args: toolStartArgs.get(event.toolCallId) ?? {},
+        }
+        if (event.durationMs != null) toolEvt.durationMs = event.durationMs
+        if (event.success != null) toolEvt.success = event.success
+        if (event.resultSummary != null) toolEvt.resultSummary = event.resultSummary
+        pendingTools.push(toolEvt)
+      }
+
+      if (event.type === 'user' && event.message && typeof event.message.content === 'string') {
+        // user 消息前：如果有未归属的工具记录，先插入（属于上一轮的尾部）
+        if (pendingTools && pendingTools.length > 0) {
+          messages.push({ id: `tools-${event.uuid}`, role: 'system', content: '', toolEvents: pendingTools })
+          pendingTools = []
+        }
+        messages.push({ id: event.uuid, role: 'user', content: event.message.content })
+      }
+
+      if (event.type === 'assistant' && event.message && typeof event.message.content === 'string') {
+        // assistant 消息前：插入本轮工具记录
+        if (pendingTools && pendingTools.length > 0) {
+          messages.push({ id: `tools-${event.uuid}`, role: 'system', content: '', toolEvents: pendingTools })
+          pendingTools = []
+        }
+        messages.push({ id: event.uuid, role: 'assistant', content: event.message.content })
+      }
+    }
+
+    // 末尾可能有未归属的工具记录（对话中断时）
+    if (pendingTools && pendingTools.length > 0) {
+      messages.push({ id: `tools-tail`, role: 'system', content: '', toolEvents: pendingTools })
     }
 
     return { sessionId, provider, model, cwd, messages, leafEventUuid: targetLeafUuid }

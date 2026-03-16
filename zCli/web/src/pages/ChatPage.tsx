@@ -62,7 +62,12 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         if (!targetSessionId && event.sessionId) {
           window.history.replaceState(null, '', `/session/${event.sessionId}`)
         }
-        setMessages(event.messages.map(m => ({ id: m.id, role: m.role, content: m.content })))
+        setMessages(event.messages.map(m => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          ...(m.toolEvents && m.toolEvents.length > 0 ? { toolEvents: m.toolEvents } : {}),
+        })))
         msgIdCounter.current = event.messages.length
         break
       }

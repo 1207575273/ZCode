@@ -109,7 +109,7 @@ describe('SessionSnapshot', () => {
   it('should have messages array with correct element shape', () => {
     type Msg = SessionSnapshot['messages'][number]
     expectTypeOf<Msg>().toHaveProperty('id').toBeString()
-    expectTypeOf<Msg>().toHaveProperty('role').toMatchTypeOf<'user' | 'assistant'>()
+    expectTypeOf<Msg>().toHaveProperty('role').toMatchTypeOf<'user' | 'assistant' | 'system'>()
     expectTypeOf<Msg>().toHaveProperty('content').toBeString()
   })
 })

@@ -92,12 +92,27 @@ export interface SessionEvent {
   totalDurationMs?: number
 }
 
+/** 工具执行记录（loadMessages 还原用） */
+export interface SnapshotToolEvent {
+  toolCallId: string
+  toolName: string
+  args: Record<string, unknown>
+  durationMs?: number
+  success?: boolean
+  resultSummary?: string
+}
+
 export interface SessionSnapshot {
   sessionId: string
   provider: string
   model: string
   cwd: string
-  messages: Array<{ id: string; role: 'user' | 'assistant'; content: string }>
+  messages: Array<{
+    id: string
+    role: 'user' | 'assistant' | 'system'
+    content: string
+    toolEvents?: SnapshotToolEvent[]
+  }>
   /** 当前分支的叶节点 UUID */
   leafEventUuid: string | null
 }
