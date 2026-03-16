@@ -2,6 +2,7 @@
 import { execa, ExecaError } from 'execa'
 import { resolveShell } from '@platform/shell-resolver.js'
 import { detectPlatform } from '@platform/detector.js'
+import { registerProcess, unregisterProcess } from './process-tracker.js'
 import type { Tool, ToolContext, ToolResult } from './types.js'
 
 /** 默认超时 120 秒 */
@@ -100,10 +101,16 @@ export class BashTool implements Tool {
       child.catch(() => { /* 后台进程退出错误静默忽略 */ })
 
       const pid = child.pid
+      // 注册到进程追踪器，供 kill_shell 工具查询和终止
+      if (pid != null) {
+        registerProcess(pid, command, cwd)
+        // 进程退出时自动取消注册
+        child.on('exit', () => unregisterProcess(pid))
+      }
       const killHint = buildKillHint(pid)
       return {
         success: true,
-        output: `Background process started (pid: ${pid}). ${killHint}`,
+        output: `Background process started (pid: ${pid}). Use kill_shell tool or "${killHint}" to stop it.`,
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err)
