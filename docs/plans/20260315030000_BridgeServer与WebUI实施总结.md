@@ -327,22 +327,46 @@ useEffect(() => {
 
 ---
 
-## 六、启动流程
+## 六、开发、构建与运行
 
-### 5.1 开发模式
+### 6.1 三种运行模式
+
+| 模式 | 命令 | Web 前端来源 | 适用场景 |
+|------|------|-------------|---------|
+| 纯 CLI | `pnpm dev` | 无 | 日常对话，不需要 Web |
+| Dev + Web | `pnpm dev:web` | Vite dev server (HMR 热更新) | 开发 Web 前端，改代码即时刷新 |
+| 生产 + Web | `node dist/bin/zcli.js --web` | Bridge 托管 `web/dist/` 静态文件 | 正式使用，单端口，无需 Vite |
+
+### 6.2 开发模式（pnpm dev:web）
+
+**首次准备**：
+
+```bash
+cd zCli
+pnpm install          # CLI 依赖
+cd web && pnpm install # Web 前端依赖
+cd ..
+```
+
+**启动**：
+
+```bash
+pnpm dev:web
+```
+
+一条命令同时启动三个服务：
 
 ```
 pnpm dev:web
   │
   ├─ 检测 9800 端口
-  │   ├─ 空闲 → 启动 Bridge Server + Vite dev server
+  │   ├─ 空闲 → 启动 Bridge Server (Hono, port 9800)
+  │   │         + Vite dev server (后台子进程, port 5173)
   │   └─ 已占用 → 跳过（复用已有 Bridge）
   │
-  ├─ render() Ink UI
-  │   └─ useChat mount → ensureSession() 创建 session
+  ├─ render() Ink UI → useChat mount → ensureSession() 创建 session
   │
-  ├─ setTimeout 100ms → connectBridge(9800, sessionId)
-  │   └─ 作为 WS 客户端连接 Bridge，register cli + sessionId
+  ├─ connectBridge(9800, sessionId) — CLI 作为 WS 客户端连接 Bridge
   │
   └─ 终端显示：
        bootstrap 1089ms (skills 220 → hooks 9 ...)
@@ -350,22 +374,119 @@ pnpm dev:web
        ❯ _
 ```
 
-### 5.2 Web 客户端连接流程
+**Web 前端访问**：浏览器打开终端显示的 URL，Bridge Server 反代 Vite 返回页面。
+
+**开发体验**：修改 `web/src/` 下的前端代码 → Vite HMR 即时刷新，无需重启 CLI。
+
+### 6.3 生产构建
+
+**构建命令**：
+
+```bash
+cd zCli
+
+# 只构建 CLI
+pnpm build             # → dist/
+
+# 只构建 Web 前端
+pnpm build:web         # → web/dist/
+
+# 一次全构建
+pnpm build:all         # → dist/ + web/dist/
+```
+
+**构建产物目录结构**：
+
+```
+zCli/
+├── dist/                      ← CLI 构建产物 (tsup)
+│   └── bin/
+│       └── zcli.js                入口文件
+├── web/
+│   └── dist/                  ← Web 前端构建产物 (Vite)
+│       ├── index.html             SPA 入口
+│       └── assets/
+│           ├── index-xxx.js       React SPA bundle (~450KB)
+│           └── index-xxx.css      Tailwind CSS (~12KB)
+└── ...
+```
+
+### 6.4 生产模式运行
+
+```bash
+# 构建
+cd zCli && pnpm build:all
+
+# 启动（纯 CLI）
+node dist/bin/zcli.js
+
+# 启动（带 Web UI）
+node dist/bin/zcli.js --web
+```
+
+生产模式下 Bridge Server 直接托管 `web/dist/` 静态文件，**不需要 Vite**，单端口 9800 搞定一切。
+
+```
+node dist/bin/zcli.js --web
+  │
+  ├─ Bridge Server (port 9800)
+  │   ├─ /ws           → WebSocket 消息路由
+  │   ├─ /api/*        → REST API
+  │   └─ /*            → 托管 web/dist/ 静态资源 (SPA fallback)
+  │
+  ├─ CLI 作为 WS 客户端连接 Bridge
+  │
+  └─ 浏览器访问 http://localhost:9800 → 加载 React SPA → WebSocket 连接
+```
+
+### 6.5 Web 客户端连接流程（通用）
+
+不管 dev 还是生产模式，Web 端连接流程一致：
 
 ```
 浏览器打开 http://localhost:9800/session/019cebb1-xxx
   │
-  ├─ Bridge Server 反代 → Vite dev server 返回 React SPA
-  ├─ React 加载 → App.tsx 从 URL 提取 sessionId
+  ├─ 加载 React SPA（dev: Vite 反代 / 生产: 静态文件）
+  ├─ App.tsx 从 URL 提取 sessionId
   ├─ useWebSocket 连接 ws://localhost:9800/ws
   ├─ 发送 register { clientType: 'web', sessionId: '019cebb1-xxx' }
-  ├─ Bridge Server 读 JSONL → 推送 session_init { messages: [...] }
+  ├─ Bridge Server 读 session JSONL → 推送 session_init { messages: [...] }
   ├─ ChatPage 还原历史消息 + 显示 sessionId + model
   │
-  └─ 后续实时事件同步：
+  └─ 实时双向同步：
        CLI 输入 → Bridge → Web 显示
        Web 输入 → Bridge → CLI 执行 → 事件回流 → Web 显示
 ```
+
+### 6.6 多终端共享 Bridge
+
+```bash
+# 终端 1：启动 Bridge Server
+pnpm dev:web
+
+# 终端 2：检测到 9800 已占用，跳过 Bridge，作为 WS 客户端连接
+pnpm dev:web
+
+# 两个终端各自独立对话，各自有独立 sessionId
+# Web 端通过 /session/:id URL 路由访问不同 session
+# 任一终端可 /bridge stop 关闭 Bridge
+```
+
+### 6.7 NPM 包发布（规划）
+
+未来发布 npm 包时，`web/dist/` 需要包含在发布文件中：
+
+```jsonc
+// package.json
+{
+  "files": [
+    "dist/",           // CLI 构建产物
+    "web/dist/"        // Web 前端构建产物
+  ]
+}
+```
+
+用户安装后 `npx zcli --web` 直接可用，无需自己构建前端。
 
 ---
 
