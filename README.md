@@ -1,13 +1,56 @@
 # ZCli
 
-多模型 AI 编程 CLI 助手，支持 Claude、OpenAI、Gemini 等任意 OpenAI 兼容协议的模型。
+**多模型 AI 编程 CLI 助手** — 对标 Claude Code 的交互体验，但不绑定单一 LLM 提供商。
+
+---
+
+## 项目背景
+
+### 为什么做这个
+
+Claude Code 是目前最好的 AI 编程 CLI 工具，但它有一个硬约束：**只能用 Claude 模型**。对于需要在不同场景下切换模型的开发者来说，这意味着要在多个工具之间反复切换，丢失上下文和工作流的连贯性。
+
+ZCli 的目标是：**让开发者在终端中自由选择 Claude / GPT / Gemini / GLM / DeepSeek / 本地 Ollama 等任意模型，获得一致的 AI 辅助编码体验。** 同时完全兼容 Claude Code 的生态（CLAUDE.md 指令文件、MCP 协议、插件系统）。
+
+### 核心理念
+
+- **多模型自由切换** — 运行时 `/model` 一键切换，不重启、不丢上下文
+- **Claude Code 生态兼容** — CLAUDE.md、.mcp.json、插件目录结构完全兼容，已有配置零迁移
+- **Agent 能力完整** — 工具调用、并行执行、子 Agent 派发、权限管控、会话持久化
+- **可观测** — Token 计量计费、结构化日志、Session JSONL 全量审计
+- **Web 能力** — CLI 和浏览器双向实时同步，同一对话两端共享
+
+### 当前状态
+
+ZCli 处于活跃开发阶段（v0.1.0），核心 Agent 能力已稳定，日常用于驱动自身的开发（self-hosting）。
+
+### 主要特性
+
+| 特性 | 说明 |
+|------|------|
+| 多模型支持 | Claude / OpenAI / Gemini / GLM / DeepSeek / Ollama，运行时切换 |
+| 内置工具集 | read / write / edit / glob / grep / bash + 子 Agent 派发 |
+| MCP 支持 | stdio / SSE / streamable-http，动态注册外部工具 |
+| Skills 系统 | 自研 Skill 体系 + 兼容 Claude Code 插件生态（superpowers 等） |
+| 对话持久化 | JSONL 会话文件 + --resume 恢复 + /fork 分支 |
+| Token 计量 | 四维 token 记录 + 多币种计价 + /usage 实时统计 |
+| Web UI | Bridge Server 双向同步，CLI 和浏览器共享同一对话 |
+| 非交互模式 | `zcli "问题"` 单次执行 + stdin 管道输入，适用于脚本/CI |
+| 指令文件 | ZCLI.md / CLAUDE.md 多层级注入，完全兼容 Claude Code |
+| 并行工具 | 多工具调用自动并行执行，大幅缩短响应时间 |
+
+---
 
 ## 目录结构
 
 ```
 claude_cli_z01/
-  docs/       # 需求与设计文档
-  zCli/       # 项目代码
+  docs/           # 需求与设计文档
+  zCli/           # 项目代码
+    src/           # CLI 核心源码（Agent Loop / Tools / Providers / UI）
+    src/bridge/    # Bridge Server（CLI ↔ Web 桥接层）
+    web/           # Web 前端（React SPA，独立 Vite 项目）
+    tests/         # 测试
 ```
 
 ---
@@ -44,7 +87,16 @@ pnpm dev
 
 直接运行 TypeScript 源码，无需构建，修改代码后重启即可生效。
 
-### 3. 构建后运行
+### 3. 开发模式启动（含 Web UI）
+
+```bash
+cd zCli/web && pnpm install  # 首次需要安装前端依赖
+cd .. && pnpm dev:web
+```
+
+CLI + Bridge Server + Web UI 同时启动，浏览器打开终端显示的地址即可双向同步对话。
+
+### 4. 构建后运行
 
 ```bash
 pnpm build
@@ -508,10 +560,13 @@ ZCli 支持项目级工具权限白名单，白名单内的工具执行时无需
 
 ## 技术栈
 
-- **运行时**：Node.js 20 + TypeScript 5（strict 模式）
+- **运行时**：Node.js 20 + TypeScript 5（strict 模式），规划中迁移 Bun.js
 - **终端 UI**：Ink 5 + React 18
+- **Web UI**：React 18 + Vite + Tailwind CSS
+- **Bridge Server**：Hono（HTTP + WebSocket 纯消息路由器）
 - **LLM 调用层**：`@anthropic-ai/sdk`（Anthropic 原生协议）+ `@langchain/openai`（OpenAI 兼容协议）
-- **Agent Loop**：完全自研（不使用 LangGraph）
+- **Agent Loop**：完全自研（不使用 LangGraph），AsyncGenerator 事件流架构
+- **持久化**：JSONL 会话文件 + libsql（SQLite，兼容 Node/Bun/Deno）
 - **包管理**：pnpm
-- **构建**：tsup
+- **构建**：tsup（CLI）+ Vite（Web）
 - **测试**：Vitest
