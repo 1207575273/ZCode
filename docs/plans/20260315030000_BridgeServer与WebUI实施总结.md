@@ -198,9 +198,83 @@ CLI 端 WebSocket 客户端，连接 Bridge Server。
 
 ---
 
-## 四、遇到的问题与解决
+## 四、Session 生命周期重构
 
-### 4.1 消息重复显示（事件回路）
+这是本次改造中一个根本性的架构调整，影响面远超 Web UI 本身。
+
+### 4.1 原始设计（惰性创建）
+
+```
+CLI 启动 → 无 session
+  → 用户第一次发消息 → submit()
+    → sessionLogger.ensureSession(provider, model)
+      → sessionStore.create() 写入 session_start JSONL
+      → 返回 sessionId
+  → 后续 submit 调用 ensureSession → 幂等返回已有 ID
+```
+
+**设计初衷**：启动不一定会对话（用户可能只是看看 /help），不浪费 JSONL 文件。
+
+### 4.2 问题暴露
+
+引入 Bridge Server 后，session 的惰性创建导致一连串问题：
+
+1. **Bridge 连接时 sessionId 为 null** — Web 客户端连接时 `getCurrentSessionId()` 返回 null，无法推送历史消息，无法路由
+2. **Web UI 地址无法显示 sessionId** — 启动时没有 sessionId，URL 不完整
+3. **Bridge Client 无法 register** — 没有 sessionId 就无法声明身份，消息路由不工作
+4. **多终端 session 隔离失败** — 没有 sessionId 的 CLI 无法被区分
+
+本质原因：**session 是 Bridge 架构的路由基础，不是可选的**。惰性创建与"session 即身份"的新架构矛盾。
+
+### 4.3 重构方案（即时创建）
+
+```
+CLI 启动 → render() → useChat mount
+  → useEffect 立即调用 ensureSession(provider, model)
+    → sessionStore.create() 写入 session_start JSONL
+    → sessionId 立即可用
+  → Bridge Client 拿到 sessionId → register → 路由生效
+  → Web UI 显示完整 URL: /session/{sessionId}
+```
+
+**改动**：在 `useChat` hook 中新增一个 `useEffect`：
+
+```typescript
+useEffect(() => {
+  if (currentProvider && currentModel) {
+    sessionLogger.ensureSession(currentProvider, currentModel)
+  }
+}, [])
+```
+
+**为什么这样做是安全的**：
+- `ensureSession` 本身是幂等的（`if (this.#sessionId) return`）
+- 后续 submit 调用时直接返回已有 ID，不会重复创建
+- 性能影响为零 — 就是同步写一行 JSONL（`session_start` 事件）
+- 即使用户不对话直接退出，只多了一个空 session 文件，`/gc` 指令会清理
+
+### 4.4 影响范围
+
+| 模块 | 影响 |
+|------|------|
+| `useChat.ts` | 新增 mount useEffect，调 ensureSession |
+| `sessionLogger` | 零改动（ensureSession 本身就是幂等的） |
+| `bin/zcli.ts` | Bridge 连接时机从"启动时"改为"render 后 100ms"（等 session 创建） |
+| Bridge Server | 连接时能拿到 sessionId，推送 session_init 正常工作 |
+| Web 前端 | 连接后立即收到历史消息，URL 包含完整 sessionId |
+| `/resume` 恢复 | 不受影响 — resume 走 `sessionLogger.bind()`，不走 ensureSession |
+
+### 4.5 设计启示
+
+**惰性初始化不是银弹**。当一个资源从"可选"变为"基础设施"时，惰性创建反而成为障碍。Session 在纯 CLI 模式下是"对话后才需要"的，但在 Bridge 架构下是"连接路由的身份凭证"，必须在对话前就存在。
+
+识别这个时机变化的信号：**当多个模块开始依赖某个资源的存在性（而非内容）时，就该改为即时初始化。**
+
+---
+
+## 五、其他问题与解决
+
+### 5.1 消息重复显示（事件回路）
 
 **现象**：Web 发一条"你好"，页面显示三条。
 
@@ -213,7 +287,7 @@ CLI 端 WebSocket 客户端，连接 Bridge Server。
 - `submit()` 增加 `_source` 参数，web 触发时不重复 emit
 - Web 端本地 optimistic 添加用户消息，不依赖服务端 echo
 
-### 4.2 WebSocket 连接失败
+### 5.2 WebSocket 连接失败
 
 **现象**：`WebSocket connection to 'ws://localhost:9800/ws' failed`
 
@@ -221,7 +295,7 @@ CLI 端 WebSocket 客户端，连接 Bridge Server。
 
 **解决**：反代排除 `/ws` 和 `/api/` 前缀路径，让 Bridge Server 自己处理。
 
-### 4.3 多终端 session 串台
+### 5.3 多终端 session 串台
 
 **现象**：终端 1 的消息出现在终端 2 的 Web 界面。
 
@@ -229,7 +303,7 @@ CLI 端 WebSocket 客户端，连接 Bridge Server。
 
 **解决**：重构为纯路由器架构，所有客户端 register 时声明 sessionId，路由按 sessionId 隔离。
 
-### 4.4 Web UI 地址被终端覆盖
+### 5.4 Web UI 地址被终端覆盖
 
 **现象**：`process.stderr.write` 输出的 Web UI 地址闪一下就被 Ink 渲染覆盖。
 
@@ -237,21 +311,13 @@ CLI 端 WebSocket 客户端，连接 Bridge Server。
 
 **解决**：不用 `stderr.write`，改为在 Ink 组件内渲染 Web UI 地址（InputBar 上方常驻显示）。
 
-### 4.5 Session 启动时机
-
-**现象**：Web 连接时 `getCurrentSessionId()` 返回 null，无法推送历史。
-
-**原因**：Session 原来在第一次 submit 时惰性创建，启动时还没有。
-
-**解决**：useChat mount 时立即调 `ensureSession()`（幂等），启动即创建 session。不影响性能——就是写一行 JSONL。
-
-### 4.6 端口冲突崩溃
+### 5.5 端口冲突崩溃
 
 **现象**：第二个终端 `pnpm dev:web` 时 `EADDRINUSE` 崩溃。
 
 **解决**：启动前用 `net.createServer` 探测端口，已占用则跳过 Bridge 启动，直接作为 WS 客户端连接。
 
-### 4.7 Web 注册空 sessionId
+### 5.6 Web 注册空 sessionId
 
 **现象**：直接访问 `http://localhost:9800`（不带 `/session/xxx`），消息不通。
 
@@ -261,7 +327,7 @@ CLI 端 WebSocket 客户端，连接 Bridge Server。
 
 ---
 
-## 五、启动流程
+## 六、启动流程
 
 ### 5.1 开发模式
 
@@ -303,7 +369,7 @@ pnpm dev:web
 
 ---
 
-## 六、文件清单
+## 七、文件清单
 
 ### 新增文件
 
@@ -338,7 +404,7 @@ pnpm dev:web
 
 ---
 
-## 七、后续规划
+## 八、后续规划
 
 ### Phase 2：Dashboard 看板
 
