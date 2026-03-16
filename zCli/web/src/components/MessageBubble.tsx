@@ -19,7 +19,6 @@ export function MessageBubble({ message }: Props) {
     console.log('[MessageBubble] rendering assistant msg:', message.id, 'content length:', message.content.length, 'first 100:', message.content.slice(0, 100))
   }
 
-  // system 消息：如果有 toolEvents，渲染结构化工具状态（与实时渲染完全一致）
   if (isSystem && message.toolEvents && message.toolEvents.length > 0) {
     return (
       <div className="mb-2 px-2">
@@ -28,7 +27,6 @@ export function MessageBubble({ message }: Props) {
     )
   }
 
-  // system 消息：纯文本（错误、状态通知等）
   if (isSystem) {
     return (
       <div className="mb-3 px-2">
