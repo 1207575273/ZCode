@@ -15,6 +15,10 @@ export function MessageBubble({ message }: Props) {
   const isSystem = message.role === 'system'
   const sourceTag = message.source === 'web' ? ' (web)' : message.source === 'cli' ? ' (cli)' : ''
 
+  if (message.role === 'assistant') {
+    console.log('[MessageBubble] rendering assistant msg:', message.id, 'content length:', message.content.length, 'first 100:', message.content.slice(0, 100))
+  }
+
   // system 消息：如果有 toolEvents，渲染结构化工具状态（与实时渲染完全一致）
   if (isSystem && message.toolEvents && message.toolEvents.length > 0) {
     return (

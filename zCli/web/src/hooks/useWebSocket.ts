@@ -1,16 +1,22 @@
 // src/hooks/useWebSocket.ts
 
+/**
+ * WebSocket 连接管理 Hook。
+ *
+ * 用 onEvent callback + useRef 处理事件流（不丢事件）。
+ * 防止 React StrictMode 下重复连接导致事件翻倍。
+ */
+
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { ServerEvent, ClientMessage } from '../types'
 
 interface UseWebSocketOptions {
-  /** 要订阅的 sessionId（从 URL 路由提取） */
   sessionId?: string | null
+  onEvent?: (event: ServerEvent) => void
 }
 
 interface UseWebSocketReturn {
   connected: boolean
-  lastEvent: ServerEvent | null
   send: (msg: ClientMessage) => void
 }
 
@@ -18,18 +24,26 @@ const WS_URL = `ws://${window.location.hostname}:${window.location.port}/ws`
 const RECONNECT_INTERVAL_MS = 2000
 
 export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketReturn {
-  const { sessionId } = options
+  const { sessionId, onEvent } = options
   const [connected, setConnected] = useState(false)
-  const [lastEvent, setLastEvent] = useState<ServerEvent | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const onEventRef = useRef(onEvent)
+  onEventRef.current = onEvent
 
   const connect = useCallback(() => {
+    // 关闭已有连接（防止 StrictMode 重复连接）
+    if (wsRef.current) {
+      wsRef.current.onclose = null // 移除 onclose 防止触发重连
+      wsRef.current.close()
+      wsRef.current = null
+    }
+    clearTimeout(reconnectTimer.current)
+
     const ws = new WebSocket(WS_URL)
 
     ws.onopen = () => {
       setConnected(true)
-      // 连接后发送 register 消息，声明 web 身份和 sessionId
       ws.send(JSON.stringify({
         type: 'register',
         clientType: 'web',
@@ -40,16 +54,19 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     ws.onmessage = (e) => {
       try {
         const event = JSON.parse(e.data as string) as ServerEvent
-        setLastEvent(event)
+        onEventRef.current?.(event)
       } catch {
-        // 无效 JSON，静默忽略
+        // 无效 JSON
       }
     }
 
     ws.onclose = () => {
-      setConnected(false)
-      wsRef.current = null
-      reconnectTimer.current = setTimeout(connect, RECONNECT_INTERVAL_MS)
+      // 只有当前活跃的连接断开才重连（防止 StrictMode 的旧连接触发重连）
+      if (wsRef.current === ws) {
+        setConnected(false)
+        wsRef.current = null
+        reconnectTimer.current = setTimeout(connect, RECONNECT_INTERVAL_MS)
+      }
     }
 
     ws.onerror = () => {
@@ -63,7 +80,11 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     connect()
     return () => {
       clearTimeout(reconnectTimer.current)
-      wsRef.current?.close()
+      if (wsRef.current) {
+        wsRef.current.onclose = null // cleanup 时不触发重连
+        wsRef.current.close()
+        wsRef.current = null
+      }
     }
   }, [connect])
 
@@ -73,5 +94,5 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     }
   }, [])
 
-  return { connected, lastEvent, send }
+  return { connected, send }
 }

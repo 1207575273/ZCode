@@ -15,7 +15,6 @@ interface ChatPageProps {
 }
 
 export function ChatPage({ targetSessionId }: ChatPageProps) {
-  const { connected, lastEvent, send } = useWebSocket({ sessionId: targetSessionId })
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [sessionModel, setSessionModel] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -27,26 +26,31 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const msgIdCounter = useRef(0)
 
-  useEffect(() => {
-    if (!lastEvent) return
-    handleServerEvent(lastEvent)
-  }, [lastEvent])
+  // ── 本轮追踪（ref，不触发重渲染，done 时一次性提交） ──
+  const turnTextRef = useRef('')
+  const turnToolsRef = useRef<ToolEvent[]>([])
+
+  // WebSocket 事件通过 callback 直接处理（不经过 useState，保证不丢事件）
+  const { connected, send } = useWebSocket({
+    sessionId: targetSessionId,
+    onEvent: handleServerEvent,
+  })
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streaming, toolEvents])
 
   function handleServerEvent(event: ServerEvent) {
+    console.log('[WS Event]', event.type, event.type === 'text' ? `(+${(event as {text:string}).text.length} chars)` : '', event)
+
     switch (event.type) {
       case 'session_init': {
-        // 连接时收到：sessionId + JSONL 历史消息还原
+        console.log('[session_init] sessionId:', event.sessionId, 'messages:', event.messages.length)
         setSessionId(event.sessionId)
         if (event.model) setSessionModel(event.model)
-        // URL 同步：如果当前路径不含 sessionId，更新 URL（不触发页面刷新）
         if (!targetSessionId && event.sessionId) {
           window.history.replaceState(null, '', `/session/${event.sessionId}`)
         }
-        // 还原历史消息
         const restored: ChatMessage[] = event.messages.map(m => ({
           id: m.id,
           role: m.role,
@@ -57,7 +61,7 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         break
       }
       case 'user_input': {
-        // CLI 端的输入同步到 Web 显示
+        console.log('[user_input] source:', event.source, 'text:', event.text.slice(0, 50))
         const msg: ChatMessage = {
           id: `msg-${++msgIdCounter.current}`,
           role: 'user',
@@ -67,24 +71,17 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         setMessages(prev => [...prev, msg])
         setStreaming('')
         setIsStreaming(true)
+        turnTextRef.current = ''
+        turnToolsRef.current = []
         break
       }
       case 'text':
+        turnTextRef.current += event.text
         setStreaming(prev => prev + event.text)
         break
       case 'tool_start':
-        // 工具开始前，先把已累积的流式文本固化为 assistant 消息
-        // 这样渲染顺序是：AI 文本 → 工具 → AI 后续文本
-        setStreaming(prev => {
-          if (prev) {
-            setMessages(msgs => [...msgs, {
-              id: `msg-${++msgIdCounter.current}`,
-              role: 'assistant' as const,
-              content: prev,
-            }])
-          }
-          return ''
-        })
+        console.log('[tool_start]', event.toolName, 'turnText so far:', turnTextRef.current.length, 'chars')
+        setStreaming('')
         setToolEvents(prev => [...prev, {
           toolCallId: event.toolCallId,
           toolName: event.toolName,
@@ -93,55 +90,73 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         }])
         break
       case 'tool_done': {
-        // 工具完成：更新状态，并立即写入消息历史（不等 done 事件）
-        const doneEvent = {
+        console.log('[tool_done]', event.toolName, event.durationMs, 'ms', 'success:', event.success)
+        const completedEvent: ToolEvent = {
           toolCallId: event.toolCallId,
           toolName: event.toolName,
-          args: {} as Record<string, unknown>,
-          status: 'done' as const,
+          args: {},
+          status: 'done',
           durationMs: event.durationMs,
           success: event.success,
           resultSummary: event.resultSummary,
         }
-        // 从 running 列表中找到完整 args
         setToolEvents(prev => {
           const running = prev.find(e => e.toolCallId === event.toolCallId)
-          const completed = { ...doneEvent, args: running?.args ?? {} }
-          // 写入消息历史
-          setMessages(msgs => [...msgs, {
-            id: `msg-${++msgIdCounter.current}`,
-            role: 'system' as const,
-            content: '',
-            toolEvents: [completed],
-          }])
-          // 从实时列表移除
-          return prev.filter(e => e.toolCallId !== event.toolCallId)
+          if (running) completedEvent.args = running.args
+          turnToolsRef.current.push(completedEvent)
+          return prev.map(e =>
+            e.toolCallId === event.toolCallId
+              ? { ...e, status: 'done' as const, durationMs: event.durationMs, success: event.success, resultSummary: event.resultSummary }
+              : e
+          )
         })
         break
       }
       case 'permission_request':
+        console.log('[permission_request]', event.toolName)
         setPendingPermission({ toolName: event.toolName, args: event.args })
         break
       case 'user_question_request':
+        console.log('[user_question_request]', event.questions.length, 'questions')
         setPendingQuestions(event.questions)
         break
       case 'done': {
-        // 固化最后的流式文本（工具历史已在 tool_done 时逐个写入）
-        setStreaming(prev => {
-          if (prev) {
-            setMessages(msgs => [...msgs, {
-              id: `msg-${++msgIdCounter.current}`,
-              role: 'assistant',
-              content: prev,
-            }])
-          }
-          return ''
-        })
-        // 清理可能残留的 running 工具
+        const finalText = turnTextRef.current
+        const finalTools = [...turnToolsRef.current]
+        console.log('[done] finalText:', finalText.length, 'chars, finalTools:', finalTools.length)
+
+        const newMessages: ChatMessage[] = []
+        if (finalTools.length > 0) {
+          newMessages.push({
+            id: `msg-${++msgIdCounter.current}`,
+            role: 'system',
+            content: '',
+            toolEvents: finalTools,
+          })
+        }
+        if (finalText) {
+          newMessages.push({
+            id: `msg-${++msgIdCounter.current}`,
+            role: 'assistant',
+            content: finalText,
+          })
+        }
+
+        // 全部同步：清流式 + 加消息，React 18 自动批处理
+        setStreaming('')
         setToolEvents([])
         setIsStreaming(false)
         setPendingPermission(null)
         setPendingQuestions(null)
+        if (newMessages.length > 0) {
+          setMessages(prev => {
+            const next = [...prev, ...newMessages]
+            console.log('[done] messages after add:', next.length, 'last role:', next[next.length - 1]?.role, 'last content length:', next[next.length - 1]?.content.length)
+            return next
+          })
+        }
+        turnTextRef.current = ''
+        turnToolsRef.current = []
         break
       }
       case 'bridge_stop':
@@ -166,22 +181,21 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
   }
 
   const handleSubmit = useCallback((text: string) => {
-    // 流式中发新消息 → 先中止当前回复，再提交（与 CLI interruptAndSubmit 行为一致）
     if (isStreaming) {
-      // 将已有流式内容固化为部分回复
-      setStreaming(prev => {
-        if (prev) {
-          setMessages(msgs => [...msgs, {
-            id: `msg-${++msgIdCounter.current}`,
-            role: 'assistant' as const,
-            content: prev + '\n\n*(已中断)*',
-          }])
-        }
-        return ''
-      })
+      // 中断当前流
+      if (turnTextRef.current) {
+        setMessages(prev => [...prev, {
+          id: `msg-${++msgIdCounter.current}`,
+          role: 'assistant' as const,
+          content: turnTextRef.current + '\n\n*(已中断)*',
+        }])
+      }
+      setStreaming('')
       setToolEvents([])
       setPendingPermission(null)
       setPendingQuestions(null)
+      turnTextRef.current = ''
+      turnToolsRef.current = []
       send({ type: 'abort' })
     }
 
@@ -193,7 +207,8 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
     }])
     setStreaming('')
     setIsStreaming(true)
-    // 短暂延迟让 abort 先到达 CLI，再发新消息
+    turnTextRef.current = ''
+    turnToolsRef.current = []
     setTimeout(() => send({ type: 'chat', text }), 50)
   }, [send, isStreaming])
 
