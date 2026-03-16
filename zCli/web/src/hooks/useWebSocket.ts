@@ -1,7 +1,7 @@
 // src/hooks/useWebSocket.ts
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import type { ServerEvent, ClientMessage } from '../types.js'
+import type { ServerEvent, ClientMessage } from '../types'
 
 interface UseWebSocketOptions {
   /** 要订阅的 sessionId（从 URL 路由提取） */

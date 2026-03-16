@@ -1,13 +1,13 @@
 // src/pages/ChatPage.tsx
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useWebSocket } from '../hooks/useWebSocket.js'
-import { MessageBubble } from '../components/MessageBubble.js'
-import { InputBar } from '../components/InputBar.js'
-import { ToolStatus } from '../components/ToolStatus.js'
-import { PermissionCard } from '../components/PermissionCard.js'
-import { UserQuestionForm } from '../components/UserQuestionForm.js'
-import type { ChatMessage, ToolEvent, ServerEvent, UserQuestion } from '../types.js'
+import { useWebSocket } from '../hooks/useWebSocket'
+import { MessageBubble } from '../components/MessageBubble'
+import { InputBar } from '../components/InputBar'
+import { ToolStatus } from '../components/ToolStatus'
+import { PermissionCard } from '../components/PermissionCard'
+import { UserQuestionForm } from '../components/UserQuestionForm'
+import type { ChatMessage, ToolEvent, ServerEvent, UserQuestion } from '../types'
 
 interface ChatPageProps {
   /** URL 路由中的 sessionId，为 null 时连接当前活跃 session */

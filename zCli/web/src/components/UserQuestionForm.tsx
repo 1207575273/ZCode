@@ -1,7 +1,7 @@
 // src/components/UserQuestionForm.tsx
 
 import { useState, useCallback } from 'react'
-import type { UserQuestion } from '../types.js'
+import type { UserQuestion } from '../types'
 
 interface Props {
   questions: UserQuestion[]

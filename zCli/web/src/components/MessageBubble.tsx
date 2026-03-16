@@ -2,8 +2,8 @@
 
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
-import { ToolStatus } from './ToolStatus.js'
-import type { ChatMessage } from '../types.js'
+import { ToolStatus } from './ToolStatus'
+import type { ChatMessage } from '../types'
 
 interface Props {
   message: ChatMessage

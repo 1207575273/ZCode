@@ -11,7 +11,7 @@
  */
 
 import { useState, useCallback } from 'react'
-import type { ToolEvent } from '../types.js'
+import type { ToolEvent } from '../types'
 
 /** 工具名 → 显示名映射 */
 const DISPLAY_NAMES: Record<string, string> = {

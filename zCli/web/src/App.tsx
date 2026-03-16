@@ -1,6 +1,6 @@
 // src/App.tsx
 
-import { ChatPage } from './pages/ChatPage.js'
+import { ChatPage } from './pages/ChatPage'
 
 /** 从 URL 路径中提取 sessionId: /session/:id */
 function getSessionIdFromUrl(): string | null {
