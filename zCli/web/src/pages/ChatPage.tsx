@@ -245,9 +245,13 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
           <MessageBubble key={msg.id} message={msg} />
         ))}
 
-        {/* 流式输出 */}
+        {/* 流式输出：纯文本渲染（不走 ReactMarkdown，避免不完整 Markdown 渲染乱码） */}
         {streaming && (
-          <MessageBubble message={{ id: 'streaming', role: 'assistant', content: streaming }} />
+          <div className="flex justify-start mb-3">
+            <div className="max-w-[80%] rounded-lg px-4 py-3 bg-gray-800 text-gray-100">
+              <p className="whitespace-pre-wrap text-sm">{streaming}</p>
+            </div>
+          </div>
         )}
 
         {/* 工具执行进度（实时） */}
