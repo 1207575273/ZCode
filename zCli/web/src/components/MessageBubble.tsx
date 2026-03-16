@@ -2,7 +2,7 @@
 
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
-import { ToolHistoryBlock } from './ToolHistoryBlock.js'
+import { ToolStatus } from './ToolStatus.js'
 import type { ChatMessage } from '../types.js'
 
 interface Props {
@@ -14,11 +14,11 @@ export function MessageBubble({ message }: Props) {
   const isSystem = message.role === 'system'
   const sourceTag = message.source === 'web' ? ' (web)' : message.source === 'cli' ? ' (cli)' : ''
 
-  // system 消息：如果有 toolEvents，渲染结构化工具历史块
+  // system 消息：如果有 toolEvents，渲染结构化工具状态（与实时渲染完全一致）
   if (isSystem && message.toolEvents && message.toolEvents.length > 0) {
     return (
-      <div className="mb-3 px-2">
-        <ToolHistoryBlock events={message.toolEvents} />
+      <div className="mb-2 px-2">
+        <ToolStatus events={message.toolEvents} />
       </div>
     )
   }
