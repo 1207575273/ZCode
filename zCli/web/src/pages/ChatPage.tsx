@@ -73,6 +73,18 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         setStreaming(prev => prev + event.text)
         break
       case 'tool_start':
+        // 工具开始前，先把已累积的流式文本固化为 assistant 消息
+        // 这样渲染顺序是：AI 文本 → 工具 → AI 后续文本
+        setStreaming(prev => {
+          if (prev) {
+            setMessages(msgs => [...msgs, {
+              id: `msg-${++msgIdCounter.current}`,
+              role: 'assistant' as const,
+              content: prev,
+            }])
+          }
+          return ''
+        })
         setToolEvents(prev => [...prev, {
           toolCallId: event.toolCallId,
           toolName: event.toolName,
@@ -80,13 +92,33 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
           status: 'running',
         }])
         break
-      case 'tool_done':
-        setToolEvents(prev => prev.map(e =>
-          e.toolCallId === event.toolCallId
-            ? { ...e, status: 'done' as const, durationMs: event.durationMs, success: event.success, resultSummary: event.resultSummary }
-            : e
-        ))
+      case 'tool_done': {
+        // 工具完成：更新状态，并立即写入消息历史（不等 done 事件）
+        const doneEvent = {
+          toolCallId: event.toolCallId,
+          toolName: event.toolName,
+          args: {} as Record<string, unknown>,
+          status: 'done' as const,
+          durationMs: event.durationMs,
+          success: event.success,
+          resultSummary: event.resultSummary,
+        }
+        // 从 running 列表中找到完整 args
+        setToolEvents(prev => {
+          const running = prev.find(e => e.toolCallId === event.toolCallId)
+          const completed = { ...doneEvent, args: running?.args ?? {} }
+          // 写入消息历史
+          setMessages(msgs => [...msgs, {
+            id: `msg-${++msgIdCounter.current}`,
+            role: 'system' as const,
+            content: '',
+            toolEvents: [completed],
+          }])
+          // 从实时列表移除
+          return prev.filter(e => e.toolCallId !== event.toolCallId)
+        })
         break
+      }
       case 'permission_request':
         setPendingPermission({ toolName: event.toolName, args: event.args })
         break
@@ -94,31 +126,19 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         setPendingQuestions(event.questions)
         break
       case 'done': {
-        // 将流式内容固化为消息气泡
+        // 固化最后的流式文本（工具历史已在 tool_done 时逐个写入）
         setStreaming(prev => {
           if (prev) {
-            const assistantMsg: ChatMessage = {
+            setMessages(msgs => [...msgs, {
               id: `msg-${++msgIdCounter.current}`,
               role: 'assistant',
               content: prev,
-            }
-            setMessages(msgs => [...msgs, assistantMsg])
+            }])
           }
           return ''
         })
-        // 将已完成的工具事件作为结构化数据附加到 assistant 消息
-        setToolEvents(prev => {
-          if (prev.length > 0) {
-            // 工具记录作为独立的 system 消息，保留结构化数据
-            setMessages(msgs => [...msgs, {
-              id: `msg-${++msgIdCounter.current}`,
-              role: 'system',
-              content: '',
-              toolEvents: [...prev],
-            }])
-          }
-          return []
-        })
+        // 清理可能残留的 running 工具
+        setToolEvents([])
         setIsStreaming(false)
         setPendingPermission(null)
         setPendingQuestions(null)
