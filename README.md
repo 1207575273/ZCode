@@ -2,6 +2,8 @@
 
 **多模型 AI 编程 CLI 助手** — 对标 Claude Code 的交互体验，但不绑定单一 LLM 提供商。
 
+[![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](./LICENSE)
+
 ---
 
 ## 项目背景
