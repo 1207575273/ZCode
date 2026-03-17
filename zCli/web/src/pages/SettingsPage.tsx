@@ -274,7 +274,7 @@ function ProviderCard({ name, provider }: { name: string; provider: ProviderConf
         <div className="flex items-center gap-2">
           <span className="text-gray-500">API Key:</span>
           <span className="text-gray-300 font-mono text-xs">
-            {showKey ? provider.apiKey : `${provider.apiKey.slice(0, 8)}${'•'.repeat(Math.min(provider.apiKey.length - 8, 24))}`}
+            {showKey ? provider.apiKey : `${provider.apiKey.slice(0, 8)}${'•'.repeat(Math.max(0, Math.min(provider.apiKey.length - 8, 24)))}`}
           </span>
           <button onClick={() => setShowKey(!showKey)} className="text-xs text-blue-400 hover:text-blue-300">
             {showKey ? '隐藏' : '显示'}

@@ -78,29 +78,61 @@ export function createApiRoutes(): Hono {
         `).all(...params)
       }
 
-      // 最近 7 天每日趋势
-      const dailyTrend = db.prepare(`
-        SELECT DATE(timestamp) as date,
-          COALESCE(SUM(input_tokens), 0) as totalInput,
-          COALESCE(SUM(output_tokens), 0) as totalOutput,
-          COALESCE(SUM(cost_amount), 0) as totalCost,
-          COUNT(*) as callCount
-        FROM usage_logs WHERE timestamp >= ?
-        GROUP BY DATE(timestamp)
-        ORDER BY date
-      `).all(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString())
+      // 趋势数据：按范围动态选择分组粒度
+      // 当日 → 按小时，本周 → 按天，本月 → 按天，自定义 → 按天
+      const trendByHour = (since: string, until?: string) => {
+        const { where, params } = buildWhere(since, until)
+        return db.prepare(`
+          SELECT strftime('%Y-%m-%d %H:00', timestamp) as date,
+            COALESCE(SUM(input_tokens), 0) as totalInput,
+            COALESCE(SUM(output_tokens), 0) as totalOutput,
+            COALESCE(SUM(cost_amount), 0) as totalCost,
+            COUNT(*) as callCount
+          FROM usage_logs ${where}
+          GROUP BY strftime('%Y-%m-%d %H:00', timestamp)
+          ORDER BY date
+        `).all(...params)
+      }
 
-      const sessions = sessionStore.list({ limit: 5 })
+      const trendByDay = (since: string, until?: string) => {
+        const { where, params } = buildWhere(since, until)
+        return db.prepare(`
+          SELECT DATE(timestamp) as date,
+            COALESCE(SUM(input_tokens), 0) as totalInput,
+            COALESCE(SUM(output_tokens), 0) as totalOutput,
+            COALESCE(SUM(cost_amount), 0) as totalCost,
+            COUNT(*) as callCount
+          FROM usage_logs ${where}
+          GROUP BY DATE(timestamp)
+          ORDER BY date
+        `).all(...params)
+      }
 
+      const sessions = sessionStore.list({ limit: 50 })
       const customFrom = c.req.query('from')
       const customTo = c.req.query('to')
 
       return c.json({
-        today: { stats: statsByRange(todayStart.toISOString()), byProvider: byProvider(todayStart.toISOString()) },
-        week: { stats: statsByRange(weekStart.toISOString()), byProvider: byProvider(weekStart.toISOString()) },
-        month: { stats: statsByRange(monthStart.toISOString()), byProvider: byProvider(monthStart.toISOString()) },
-        custom: customFrom ? { stats: statsByRange(customFrom, customTo), byProvider: byProvider(customFrom, customTo) } : null,
-        dailyTrend,
+        today: {
+          stats: statsByRange(todayStart.toISOString()),
+          byProvider: byProvider(todayStart.toISOString()),
+          trend: trendByHour(todayStart.toISOString()),
+        },
+        week: {
+          stats: statsByRange(weekStart.toISOString()),
+          byProvider: byProvider(weekStart.toISOString()),
+          trend: trendByDay(weekStart.toISOString()),
+        },
+        month: {
+          stats: statsByRange(monthStart.toISOString()),
+          byProvider: byProvider(monthStart.toISOString()),
+          trend: trendByDay(monthStart.toISOString()),
+        },
+        custom: customFrom ? {
+          stats: statsByRange(customFrom, customTo),
+          byProvider: byProvider(customFrom, customTo),
+          trend: trendByDay(customFrom, customTo),
+        } : null,
         recentSessions: sessions,
       })
     } catch (err) {

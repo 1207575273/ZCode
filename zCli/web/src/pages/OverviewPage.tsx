@@ -9,10 +9,10 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, 
 
 interface ProviderStat { provider: string; totalTokens: number; totalCost: number; currency: string; callCount: number }
 interface ModelStat { provider: string; model: string; totalInput: number; totalOutput: number; totalCacheRead: number; totalCacheWrite: number; totalCost: number; currency: string; callCount: number }
-interface DailyTrend { date: string; totalInput: number; totalOutput: number; totalCost: number; callCount: number }
-interface RangeData { stats: ModelStat[]; byProvider: ProviderStat[] }
+interface TrendPoint { date: string; totalInput: number; totalOutput: number; totalCost: number; callCount: number }
+interface RangeData { stats: ModelStat[]; byProvider: ProviderStat[]; trend: TrendPoint[] }
 interface SessionSummary { sessionId: string; model: string; provider: string; messageCount: number; createdAt: string }
-interface OverviewData { today: RangeData; week: RangeData; month: RangeData; custom: RangeData | null; dailyTrend: DailyTrend[]; recentSessions: SessionSummary[] }
+interface OverviewData { today: RangeData; week: RangeData; month: RangeData; custom: RangeData | null; recentSessions: SessionSummary[] }
 
 type RangeTab = 'today' | 'week' | 'month' | 'custom'
 
@@ -92,13 +92,16 @@ export function OverviewPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-6">
-        {/* 折线图 */}
+        {/* 折线图：跟随 tab 的趋势数据 */}
         <div className="bg-gray-800 rounded-lg p-4">
-          <h3 className="text-sm text-gray-400 mb-3">最近 7 天 Token 消耗趋势</h3>
-          {data.dailyTrend.length > 0 ? (
+          <h3 className="text-sm text-gray-400 mb-3">
+            {tab === 'today' ? '当日 Token 消耗（按小时）' : tab === 'week' ? '本周 Token 消耗（按天）' : tab === 'month' ? '本月 Token 消耗（按天）' : '自定义范围 Token 消耗'}
+          </h3>
+          {rangeData.trend.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={data.dailyTrend}>
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={d => d.slice(5)} />
+              <LineChart data={rangeData.trend}>
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }}
+                  tickFormatter={d => tab === 'today' ? d.slice(11, 16) : d.slice(5)} />
                 <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={fmtTokens} />
                 <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
                   labelStyle={{ color: '#9ca3af' }} formatter={(v) => fmtTokens(Number(v ?? 0))} />
@@ -109,7 +112,7 @@ export function OverviewPage() {
           ) : <Empty />}
         </div>
 
-        {/* 饼图 */}
+        {/* 饼图：跟随 tab */}
         <div className="bg-gray-800 rounded-lg p-4">
           <h3 className="text-sm text-gray-400 mb-3">供应商 Token 消耗分布</h3>
           {rangeData.byProvider.length > 0 ? (
@@ -165,23 +168,36 @@ export function OverviewPage() {
         </div>
       )}
 
-      {/* 最近会话 */}
+      {/* 会话列表：按 tab 时间范围过滤 */}
       <div className="bg-gray-800 rounded-lg p-4">
-        <h3 className="text-sm text-gray-400 mb-3">最近会话</h3>
-        {data.recentSessions.length === 0 ? <Empty /> : (
-          <div className="space-y-1">
-            {data.recentSessions.map(s => (
-              <Link key={s.sessionId} to={`/conversations/${s.sessionId}`}
-                className="flex items-center justify-between p-2 rounded hover:bg-gray-700/50 transition-colors">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono text-gray-500">{s.sessionId.slice(0, 8)}</span>
-                  <span className="text-xs bg-gray-700 px-1.5 py-0.5 rounded">{s.model}</span>
-                </div>
-                <span className="text-xs text-gray-500">{new Date(s.createdAt).toLocaleString()}</span>
-              </Link>
-            ))}
-          </div>
-        )}
+        <h3 className="text-sm text-gray-400 mb-3">
+          {tab === 'today' ? '当日会话' : tab === 'week' ? '本周会话' : tab === 'month' ? '本月会话' : '时间段内会话'}
+        </h3>
+        {(() => {
+          const now = new Date()
+          let since: Date
+          if (tab === 'today') { since = new Date(now); since.setHours(0, 0, 0, 0) }
+          else if (tab === 'week') { since = new Date(now); since.setDate(since.getDate() - since.getDay()); since.setHours(0, 0, 0, 0) }
+          else if (tab === 'month') { since = new Date(now); since.setDate(1); since.setHours(0, 0, 0, 0) }
+          else { since = new Date(customFrom) }
+
+          const filtered = data.recentSessions.filter(s => new Date(s.createdAt) >= since)
+          if (filtered.length === 0) return <p className="text-gray-600 text-sm">该时间段无会话</p>
+          return (
+            <div className="space-y-1">
+              {filtered.slice(0, 10).map(s => (
+                <Link key={s.sessionId} to={`/conversations/${s.sessionId}`}
+                  className="flex items-center justify-between p-2 rounded hover:bg-gray-700/50 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-gray-500">{s.sessionId.slice(0, 8)}</span>
+                    <span className="text-xs bg-gray-700 px-1.5 py-0.5 rounded">{s.model}</span>
+                  </div>
+                  <span className="text-xs text-gray-500">{new Date(s.createdAt).toLocaleString()}</span>
+                </Link>
+              ))}
+            </div>
+          )
+        })()}
       </div>
     </div>
   )
