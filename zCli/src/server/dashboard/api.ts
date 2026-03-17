@@ -24,6 +24,7 @@ import { configManager } from '@config/config-manager.js'
 import { TokenMeter } from '@observability/token-meter.js'
 import { createPluginsRoutes } from './plugins-api.js'
 import { createMcpRoutes } from './mcp-api.js'
+import { broadcastToClients } from '../bridge/server.js'
 
 export function createApiRoutes(): Hono {
   const api = new Hono()
@@ -185,7 +186,12 @@ export function createApiRoutes(): Hono {
       const current = configManager.load()
       const merged = { ...current, ...body.config }
       configManager.save(merged)
-      return c.json({ success: true })
+      // 广播配置变更给所有 CLI 客户端（刷新内存中的 provider/model）
+      // 注意：当前是全局配置，所有 CLI 实例都会收到。后续可做项目级配置隔离。
+      const provider = String(merged.defaultProvider ?? '')
+      const model = String(merged.defaultModel ?? '')
+      broadcastToClients({ type: 'config_changed', provider, model }, 'cli')
+      return c.json({ success: true, provider, model })
     } catch (err) {
       return c.json({ error: String(err) }, 500)
     }

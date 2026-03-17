@@ -36,6 +36,7 @@ export interface SessionEvent {
     role: string
     content: string | MessageContent[]
     model?: string
+    provider?: string
     usage?: TokenUsage
   }
   provider?: string
@@ -112,6 +113,10 @@ export interface SessionSnapshot {
     role: 'user' | 'assistant' | 'system'
     content: string
     toolEvents?: SnapshotToolEvent[]
+    /** assistant 消息的模型名（中途可能切换） */
+    model?: string
+    /** assistant 消息的供应商名 */
+    provider?: string
   }>
   /** 当前分支的叶节点 UUID */
   leafEventUuid: string | null

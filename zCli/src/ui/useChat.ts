@@ -319,7 +319,7 @@ export function useChat(): UseChatReturn {
           const assistantMsg: ChatMessage = { id: randomUUID(), role: 'assistant', content: accumulated }
           setMessages(prev => [...prev, assistantMsg])
           // F9: 记录助手回复
-          sessionLogger.logAssistantMessage(accumulated, currentModel)
+          sessionLogger.logAssistantMessage(accumulated, currentModel, currentProvider)
         }
       } catch (err) {
         if (isAbortError(err)) {
@@ -327,7 +327,7 @@ export function useChat(): UseChatReturn {
           if (accumulated) {
             const partialMsg: ChatMessage = { id: randomUUID(), role: 'assistant', content: accumulated }
             setMessages(prev => [...prev, partialMsg])
-            sessionLogger.logAssistantMessage(accumulated, currentModel)
+            sessionLogger.logAssistantMessage(accumulated, currentModel, currentProvider)
           }
           // 按 Claude Code 模式记录中断消息
           sessionLogger.logUserMessage('[Request interrupted by user]')
@@ -505,6 +505,16 @@ export function useChat(): UseChatReturn {
     })
     return off
   }, [pendingQuestion, resolveQuestion])
+
+  /** Web 端配置变更 → 刷新当前 provider/model（全局配置，影响所有 CLI 实例） */
+  useEffect(() => {
+    const off = eventBus.onType('config_changed', (event) => {
+      if (event.provider) setCurrentProvider(event.provider)
+      if (event.model) setCurrentModel(event.model)
+      appendSystemMessage(`配置已更新: ${event.provider} / ${event.model}`)
+    })
+    return off
+  }, [appendSystemMessage])
 
   return {
     messages,

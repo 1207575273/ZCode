@@ -67,6 +67,8 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
           role: m.role,
           content: m.content,
           ...(m.toolEvents && m.toolEvents.length > 0 ? { toolEvents: m.toolEvents } : {}),
+          ...(m.model ? { model: m.model } : {}),
+          ...(m.provider ? { provider: m.provider } : {}),
         })))
         msgIdCounter.current = event.messages.length
         break

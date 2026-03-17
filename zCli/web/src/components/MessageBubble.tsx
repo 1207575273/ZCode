@@ -40,8 +40,15 @@ export function MessageBubble({ message }: Props) {
       <div className={`max-w-[80%] rounded-lg px-4 py-3 ${
         isUser ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-100'
       }`}>
-        {sourceTag && (
+        {/* 来源标签（user） / 模型标签（assistant） */}
+        {isUser && sourceTag && (
           <span className="text-xs opacity-50 mb-1 block">{sourceTag}</span>
+        )}
+        {!isUser && (message.model || message.provider) && (
+          <span className="text-xs text-gray-500 mb-1 block">
+            {message.provider && <span className="bg-gray-700 px-1 py-0.5 rounded mr-1">{message.provider}</span>}
+            {message.model && <span>{message.model}</span>}
+          </span>
         )}
         {isUser ? (
           <p className="whitespace-pre-wrap">{message.content}</p>

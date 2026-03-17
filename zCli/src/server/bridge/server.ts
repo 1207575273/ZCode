@@ -163,6 +163,15 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
   return { port, close: closeBridge }
 }
 
+/** 广播消息给所有指定类型的客户端（供 Dashboard API 调用） */
+export function broadcastToClients(msg: Record<string, unknown>, clientType?: 'cli' | 'web'): void {
+  const json = JSON.stringify(msg)
+  for (const client of clients.values()) {
+    if (clientType && client.clientType !== clientType) continue
+    try { client.send(json) } catch { /* ignore */ }
+  }
+}
+
 function closeBridge(): void {
   // 通知所有客户端 Bridge 即将关闭
   const closeMsg = JSON.stringify({ type: 'bridge_stop' })
@@ -246,6 +255,16 @@ function routeMessage(senderId: string, msg: { type: string; [key: string]: unkn
       for (const client of clients.values()) {
         if (client.id === senderId) continue
         if (client.sessionId !== sender.sessionId) continue
+        if (client.clientType !== 'cli') continue
+        try { client.send(json) } catch { /* ignore */ }
+      }
+      break
+    }
+
+    // ── 配置变更通知 → 广播给所有 CLI 客户端 ──
+    case 'config_changed': {
+      const json = JSON.stringify(msg)
+      for (const client of clients.values()) {
         if (client.clientType !== 'cli') continue
         try { client.send(json) } catch { /* ignore */ }
       }

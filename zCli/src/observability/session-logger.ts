@@ -150,11 +150,9 @@ export class SessionLogger {
   }
 
   /** 记录助手回复 */
-  logAssistantMessage(content: string, model?: string): void {
+  logAssistantMessage(content: string, model?: string, provider?: string): void {
     this.#appendEvent('assistant', {
-      message: model
-        ? { role: 'assistant', content, model }
-        : { role: 'assistant', content },
+      message: { role: 'assistant', content, model: model ?? '', provider: provider ?? '' },
     })
   }
 

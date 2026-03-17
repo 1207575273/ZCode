@@ -148,7 +148,10 @@ export class SessionStore {
           messages.push({ id: `tools-${event.uuid}`, role: 'system', content: '', toolEvents: pendingTools })
           pendingTools = []
         }
-        messages.push({ id: event.uuid, role: 'assistant', content: event.message.content })
+        const assistantMsg: SessionSnapshot['messages'][number] = { id: event.uuid, role: 'assistant', content: event.message.content }
+        if (event.message.model) assistantMsg.model = String(event.message.model)
+        if (event.message.provider) assistantMsg.provider = String(event.message.provider)
+        messages.push(assistantMsg)
       }
     }
 

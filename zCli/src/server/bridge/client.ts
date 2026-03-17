@@ -111,6 +111,13 @@ function handleBridgeMessage(msg: { type: string; [key: string]: unknown }): voi
       })
       break
     }
+    case 'config_changed':
+      eventBus.emit({
+        type: 'config_changed',
+        provider: String(msg['provider'] ?? ''),
+        model: String(msg['model'] ?? ''),
+      })
+      break
     case 'bridge_stop':
       // Bridge 关闭，断开连接不重连
       clearTimeout(reconnectTimer)

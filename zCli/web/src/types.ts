@@ -21,6 +21,8 @@ export interface SessionMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   toolEvents?: ToolEvent[]
+  model?: string
+  provider?: string
 }
 
 /** 服务端推送的事件 */
@@ -53,6 +55,10 @@ export interface ChatMessage {
   source?: 'cli' | 'web'
   /** assistant 消息的工具执行记录（结构化，支持折叠渲染） */
   toolEvents?: ToolEvent[]
+  /** assistant 消息的模型名 */
+  model?: string
+  /** assistant 消息的供应商名 */
+  provider?: string
 }
 
 /** 工具执行状态 */
