@@ -316,7 +316,7 @@ export function useChat(): UseChatReturn {
         }
 
         if (accumulated) {
-          const assistantMsg: ChatMessage = { id: randomUUID(), role: 'assistant', content: accumulated }
+          const assistantMsg: ChatMessage = { id: randomUUID(), role: 'assistant', content: accumulated, model: currentModel, provider: currentProvider }
           setMessages(prev => [...prev, assistantMsg])
           // F9: 记录助手回复
           sessionLogger.logAssistantMessage(accumulated, currentModel, currentProvider)
@@ -325,7 +325,7 @@ export function useChat(): UseChatReturn {
         if (isAbortError(err)) {
           // 用户中断：保存已累积的部分回复
           if (accumulated) {
-            const partialMsg: ChatMessage = { id: randomUUID(), role: 'assistant', content: accumulated }
+            const partialMsg: ChatMessage = { id: randomUUID(), role: 'assistant', content: accumulated, model: currentModel, provider: currentProvider }
             setMessages(prev => [...prev, partialMsg])
             sessionLogger.logAssistantMessage(accumulated, currentModel, currentProvider)
           }

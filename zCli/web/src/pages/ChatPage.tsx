@@ -15,7 +15,6 @@ interface ChatPageProps {
 
 export function ChatPage({ targetSessionId }: ChatPageProps) {
   const [sessionId, setSessionId] = useState<string | null>(null)
-  const [sessionModel, setSessionModel] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streaming, setStreaming] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -58,7 +57,7 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
     switch (event.type) {
       case 'session_init': {
         setSessionId(event.sessionId)
-        if (event.model) setSessionModel(event.model)
+        // model 信息现在由每条 assistant 消息携带，不需要 session 级别的
         if (!targetSessionId && event.sessionId) {
           window.history.replaceState(null, '', `/session/${event.sessionId}`)
         }
@@ -159,7 +158,6 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
       <header className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold">ZCli</h1>
-          {sessionModel && <span className="text-xs text-gray-400 bg-gray-800 px-2 py-0.5 rounded">{sessionModel}</span>}
           {sessionId && <span className="text-xs text-gray-500 font-mono">{sessionId.slice(0, 8)}</span>}
         </div>
         <div className="flex items-center gap-2">

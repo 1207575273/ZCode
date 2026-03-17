@@ -35,6 +35,10 @@ export interface ChatMessage {
   content: string
   /** 仅 role=tool 时有值：已完成的工具调用详情 */
   toolCall?: CompletedToolCall
+  /** assistant 消息的模型名 */
+  model?: string
+  /** assistant 消息的供应商名 */
+  provider?: string
 }
 
 /** user/assistant 角色的颜色和标签配置，system 走独立渲染分支。 */
@@ -64,11 +68,17 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
   if (msg.role === 'tool' && msg.toolCall) {
     return <ToolHistoryBlock toolCall={msg.toolCall} />
   }
+  const roleKey = msg.role as 'user' | 'assistant'
   return (
     <>
-      <Text color={ROLE_CONFIG[msg.role as 'user' | 'assistant'].color} bold>
-        {ROLE_CONFIG[msg.role as 'user' | 'assistant'].label}
-      </Text>
+      <Box>
+        <Text color={ROLE_CONFIG[roleKey].color} bold>
+          {ROLE_CONFIG[roleKey].label}
+        </Text>
+        {msg.role === 'assistant' && (msg.provider || msg.model) && (
+          <Text dimColor> ({msg.provider ?? ''}{msg.provider && msg.model ? '/' : ''}{msg.model ?? ''})</Text>
+        )}
+      </Box>
       <Text>{msg.content}</Text>
     </>
   )
