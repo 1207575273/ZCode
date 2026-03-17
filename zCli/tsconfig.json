@@ -30,7 +30,7 @@
       "@hooks/*": ["src/hooks/*"],
       "@file-index": ["src/file-index/index.ts"],
       "@file-index/*": ["src/file-index/*"],
-      "@bridge/*": ["src/bridge/*"]
+      "@server/*": ["src/server/*"]
     },
     "outDir": "dist",
     "rootDir": ".",

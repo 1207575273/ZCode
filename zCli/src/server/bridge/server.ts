@@ -1,4 +1,4 @@
-// src/bridge/server.ts
+// src/server/bridge/server.ts
 
 /**
  * Bridge Server — 纯消息路由器。

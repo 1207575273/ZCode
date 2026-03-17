@@ -134,7 +134,7 @@ if (args.prompt != null) {
 
   // 若指定 --web 则启动/连接 Bridge Server
   if (args.web) {
-    const { startBridgeServer, connectBridge, disconnectBridge } = await import('../src/bridge/index.js')
+    const { startBridgeServer, connectBridge, disconnectBridge } = await import('../src/server/bridge/index.js')
 
     // 检测端口是否已被占用
     const { createServer: createNetServer } = await import('node:net')

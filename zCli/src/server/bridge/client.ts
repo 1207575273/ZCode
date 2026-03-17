@@ -1,4 +1,4 @@
-// src/bridge/client.ts
+// src/server/bridge/client.ts
 
 /**
  * BridgeClient — CLI 端 WebSocket 客户端。
