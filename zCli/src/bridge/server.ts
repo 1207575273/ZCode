@@ -24,6 +24,7 @@ import type { ServerType } from '@hono/node-server'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { sessionStore } from '@persistence/index.js'
+import { createApiRoutes } from '../dashboard/api.js'
 
 const DEFAULT_PORT = 9800
 const VITE_DEV_PORT = 5173
@@ -107,6 +108,9 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
     }
     return c.json({ status: 'ok', clients: clients.size, sessions: [...sessions] })
   })
+
+  // Dashboard REST API（总览/对话/设置/计价）
+  app.route('/api', createApiRoutes())
 
   // 关闭 Bridge Server 的 API（Web 端关闭按钮 / CLI /bridge stop 指令）
   app.post('/api/bridge/stop', (c) => {
