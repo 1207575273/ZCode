@@ -1,6 +1,7 @@
 // src/App.tsx
 
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
+import { ToastProvider } from './components/Toast'
 import { Sidebar } from './components/Sidebar'
 import { ChatPage } from './pages/ChatPage'
 import { OverviewPage } from './pages/OverviewPage'
@@ -17,6 +18,7 @@ function ChatPageWrapper() {
 export function App() {
   return (
     <BrowserRouter>
+      <ToastProvider>
       <div className="flex h-screen bg-gray-950 text-gray-100">
         <Sidebar />
         <div className="flex-1 overflow-y-auto">
@@ -32,6 +34,7 @@ export function App() {
           </Routes>
         </div>
       </div>
+      </ToastProvider>
     </BrowserRouter>
   )
 }

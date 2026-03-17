@@ -1,9 +1,10 @@
 // src/pages/SettingsPage.tsx
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiGet, apiPost } from '../hooks/useApi'
 import { PluginsTab } from '../components/PluginsTab'
 import { McpTab } from '../components/McpTab'
+import { useToast } from '../components/Toast'
 
 interface ProviderConfig {
   apiKey: string
@@ -74,6 +75,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 // ═══ Provider 配置 Tab ═══
 
 function ProvidersTab() {
+  const toast = useToast()
   const [config, setConfig] = useState<ZCliConfig | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -84,17 +86,37 @@ function ProvidersTab() {
       .catch(e => setError(String(e)))
   }, [])
 
+  // 可选的 provider 名称列表
+  const providerNames = useMemo(() => config ? Object.keys(config.providers) : [], [config])
+
+  // 当前选中 provider 的 models 列表
+  const currentModels = useMemo(() => {
+    if (!config) return []
+    const prov = config.providers[config.defaultProvider]
+    return prov?.models ?? []
+  }, [config])
+
+  const handleProviderChange = useCallback((name: string) => {
+    if (!config) return
+    const prov = config.providers[name]
+    // 切换 provider 时自动选第一个 model
+    const firstModel = prov?.models?.[0] ?? config.defaultModel
+    setConfig({ ...config, defaultProvider: name, defaultModel: firstModel })
+  }, [config])
+
   const handleSave = useCallback(async () => {
     if (!config) return
     setSaving(true)
     try {
       await apiPost('/api/settings/save', { config })
       setError(null)
+      toast.success('配置已保存')
     } catch (e) {
       setError(String(e))
+      toast.error('保存失败')
     }
     setSaving(false)
-  }, [config])
+  }, [config, toast])
 
   if (error && !config) return <div className="text-red-400">加载失败: {error}</div>
   if (!config) return <div className="text-gray-500">加载中...</div>
@@ -105,23 +127,49 @@ function ProvidersTab() {
       <div className="bg-gray-800 rounded-lg p-4">
         <h3 className="text-sm font-medium text-gray-300 mb-3">默认设置</h3>
         <div className="grid grid-cols-2 gap-3">
+          {/* Provider 下拉 + 手动输入 */}
           <div>
             <label className="text-xs text-gray-400 block mb-1">默认 Provider</label>
-            <input
-              value={config.defaultProvider}
-              onChange={e => setConfig({ ...config, defaultProvider: e.target.value })}
-              className="w-full bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
-            />
+            <div className="flex gap-1">
+              <select
+                value={providerNames.includes(config.defaultProvider) ? config.defaultProvider : ''}
+                onChange={e => { if (e.target.value) handleProviderChange(e.target.value) }}
+                className="flex-1 bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="" disabled>选择 Provider</option>
+                {providerNames.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <input
+                value={config.defaultProvider}
+                onChange={e => setConfig({ ...config, defaultProvider: e.target.value })}
+                placeholder="或手动输入"
+                className="w-32 bg-gray-900 text-sm rounded px-2 py-2 outline-none focus:ring-1 focus:ring-blue-500 text-gray-400"
+              />
+            </div>
           </div>
+
+          {/* Model 下拉 + 手动输入 */}
           <div>
             <label className="text-xs text-gray-400 block mb-1">默认 Model</label>
-            <input
-              value={config.defaultModel}
-              onChange={e => setConfig({ ...config, defaultModel: e.target.value })}
-              className="w-full bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
-            />
+            <div className="flex gap-1">
+              <select
+                value={currentModels.includes(config.defaultModel) ? config.defaultModel : ''}
+                onChange={e => { if (e.target.value) setConfig({ ...config, defaultModel: e.target.value }) }}
+                className="flex-1 bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="" disabled>选择 Model</option>
+                {currentModels.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <input
+                value={config.defaultModel}
+                onChange={e => setConfig({ ...config, defaultModel: e.target.value })}
+                placeholder="或手动输入"
+                className="w-32 bg-gray-900 text-sm rounded px-2 py-2 outline-none focus:ring-1 focus:ring-blue-500 text-gray-400"
+              />
+            </div>
           </div>
         </div>
+        <p className="text-xs text-gray-500 mt-2">修改后点击"保存配置"生效（写入 ~/.zcli/config.json）</p>
       </div>
 
       {/* Provider 列表 */}
@@ -149,6 +197,7 @@ const EMPTY_RULE: Omit<PricingRule, 'id'> = {
 }
 
 function PricingTab() {
+  const toast = useToast()
   const [rules, setRules] = useState<PricingRule[]>([])
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<Partial<PricingRule> & { isNew?: boolean } | null>(null)
@@ -166,21 +215,24 @@ function PricingTab() {
     try {
       await apiPost('/api/pricing/delete', { id })
       loadRules()
-    } catch (e) { setError(String(e)) }
-  }, [loadRules])
+      toast.success('计价规则已删除')
+    } catch (e) { setError(String(e)); toast.error('删除失败') }
+  }, [loadRules, toast])
 
   const handleSave = useCallback(async () => {
     if (!editing) return
     try {
       if (editing.isNew) {
         await apiPost('/api/pricing/add', editing)
+        toast.success('计价规则已添加')
       } else {
         await apiPost('/api/pricing/update', editing)
+        toast.success('计价规则已更新')
       }
       setEditing(null)
       loadRules()
-    } catch (e) { setError(String(e)) }
-  }, [editing, loadRules])
+    } catch (e) { setError(String(e)); toast.error('保存失败') }
+  }, [editing, loadRules, toast])
 
   const sym = (c: string) => c === 'CNY' ? '¥' : '$'
 
