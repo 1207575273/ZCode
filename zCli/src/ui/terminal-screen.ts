@@ -15,16 +15,18 @@
 let hasCleared = false
 
 /**
- * 彻底清屏：清除可见区域 + scrollback 缓冲区 + 光标归位。
+ * 清屏进入对话模式：清除可见区域 + 光标归位。
  * 幂等：多次调用只生效一次（首次进入对话时清除 WelcomeScreen 残留）。
+ *
+ * 注意：不清除 scrollback 缓冲区（\x1b[3J），保留终端滚动历史。
+ * 用户可以向上滚动查看之前的输出。
  */
 export function enterAlternateScreen(): void {
   if (hasCleared) return
   hasCleared = true
-  // \x1b[2J — 清除可见区域
-  // \x1b[3J — 清除 scrollback 缓冲区
-  // \x1b[H  — 光标归位
-  process.stdout.write('\x1b[2J\x1b[3J\x1b[H')
+  // \x1b[2J — 清除可见区域（WelcomeScreen 消失）
+  // \x1b[H  — 光标归位到左上角
+  process.stdout.write('\x1b[2J\x1b[H')
 }
 
 /**
