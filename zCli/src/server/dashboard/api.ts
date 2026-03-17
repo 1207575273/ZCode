@@ -68,6 +68,10 @@ export function createApiRoutes(): Hono {
         const { where, params } = buildWhere(since, until)
         return db.prepare(`
           SELECT provider,
+            COALESCE(SUM(input_tokens), 0) as totalInput,
+            COALESCE(SUM(output_tokens), 0) as totalOutput,
+            COALESCE(SUM(cache_read), 0) as totalCacheRead,
+            COALESCE(SUM(cache_write), 0) as totalCacheWrite,
             COALESCE(SUM(input_tokens + output_tokens + cache_read + cache_write), 0) as totalTokens,
             COALESCE(SUM(cost_amount), 0) as totalCost,
             cost_currency as currency,

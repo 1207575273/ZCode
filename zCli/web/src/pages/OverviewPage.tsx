@@ -7,7 +7,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, 
 
 // ═══ 类型 ═══
 
-interface ProviderStat { provider: string; totalTokens: number; totalCost: number; currency: string; callCount: number }
+interface ProviderStat { provider: string; totalInput: number; totalOutput: number; totalCacheRead: number; totalCacheWrite: number; totalTokens: number; totalCost: number; currency: string; callCount: number }
 interface ModelStat { provider: string; model: string; totalInput: number; totalOutput: number; totalCacheRead: number; totalCacheWrite: number; totalCost: number; currency: string; callCount: number }
 interface TrendPoint { date: string; totalInput: number; totalOutput: number; totalCost: number; callCount: number }
 interface RangeData { stats: ModelStat[]; byProvider: ProviderStat[]; trend: TrendPoint[] }
@@ -91,46 +91,40 @@ export function OverviewPage() {
         <Card label="费用" value={costs.join(' + ') || '-'} color="text-yellow-400" />
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        {/* 折线图：跟随 tab 的趋势数据 */}
-        <div className="bg-gray-800 rounded-lg p-4">
-          <h3 className="text-sm text-gray-400 mb-3">
-            {tab === 'today' ? '当日 Token 消耗（按小时）' : tab === 'week' ? '本周 Token 消耗（按天）' : tab === 'month' ? '本月 Token 消耗（按天）' : '自定义范围 Token 消耗'}
-          </h3>
-          {rangeData.trend.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={rangeData.trend}>
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }}
-                  tickFormatter={d => tab === 'today' ? d.slice(11, 16) : d.slice(5)} />
-                <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={fmtTokens} />
-                <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
-                  labelStyle={{ color: '#9ca3af' }} formatter={(v) => fmtTokens(Number(v ?? 0))} />
-                <Line type="monotone" dataKey="totalInput" stroke="#3b82f6" name="输入" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="totalOutput" stroke="#10b981" name="输出" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : <Empty />}
-        </div>
+      {/* 折线图：Token + 费用趋势 */}
+      <div className="bg-gray-800 rounded-lg p-4">
+        <h3 className="text-sm text-gray-400 mb-3">
+          {tab === 'today' ? '当日趋势（按小时）' : tab === 'week' ? '本周趋势（按天）' : tab === 'month' ? '本月趋势（按天）' : '自定义范围趋势'}
+        </h3>
+        {rangeData.trend.length > 0 ? (
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={rangeData.trend}>
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }}
+                tickFormatter={d => tab === 'today' ? d.slice(11, 16) : d.slice(5)} />
+              <YAxis yAxisId="tokens" tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={fmtTokens} />
+              <YAxis yAxisId="cost" orientation="right" tick={{ fontSize: 11, fill: '#fbbf24' }} tickFormatter={v => `$${v}`} />
+              <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
+                labelStyle={{ color: '#9ca3af' }} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Line yAxisId="tokens" type="monotone" dataKey="totalInput" stroke="#3b82f6" name="输入 Token" strokeWidth={2} dot={false} />
+              <Line yAxisId="tokens" type="monotone" dataKey="totalOutput" stroke="#10b981" name="输出 Token" strokeWidth={2} dot={false} />
+              <Line yAxisId="cost" type="monotone" dataKey="totalCost" stroke="#fbbf24" name="费用" strokeWidth={2} dot={false} strokeDasharray="5 5" />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : <Empty />}
+      </div>
 
-        {/* 饼图：跟随 tab */}
-        <div className="bg-gray-800 rounded-lg p-4">
-          <h3 className="text-sm text-gray-400 mb-3">供应商 Token 消耗分布</h3>
-          {rangeData.byProvider.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={rangeData.byProvider} dataKey="totalTokens" nameKey="provider"
-                  cx="50%" cy="50%" outerRadius={80}
-                  label={({ name, percent }) => `${name ?? ''} ${((percent ?? 0) * 100).toFixed(0)}%`}
-                  labelLine={false}>
-                  {rangeData.byProvider.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
-                  formatter={(v) => fmtTokens(Number(v ?? 0))} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : <Empty />}
-        </div>
+      {/* 四维饼图：按供应商分布 */}
+      <div className="bg-gray-800 rounded-lg p-4">
+        <h3 className="text-sm text-gray-400 mb-3">供应商分布（四维 Token）</h3>
+        {rangeData.byProvider.length > 0 ? (
+          <div className="grid grid-cols-4 gap-4">
+            <PieCard title="输入 Token" data={rangeData.byProvider} dataKey="totalInput" color="#3b82f6" />
+            <PieCard title="输出 Token" data={rangeData.byProvider} dataKey="totalOutput" color="#10b981" />
+            <PieCard title="缓存读取" data={rangeData.byProvider} dataKey="totalCacheRead" color="#06b6d4" />
+            <PieCard title="缓存写入" data={rangeData.byProvider} dataKey="totalCacheWrite" color="#8b5cf6" />
+          </div>
+        ) : <Empty />}
       </div>
 
       {/* 模型明细：四维 token */}
@@ -211,6 +205,34 @@ function Card({ label, value, color }: { label: string; value: string; color?: s
   return <div className="bg-gray-800 rounded-lg p-3"><div className="text-xs text-gray-400 mb-1">{label}</div><div className={`text-lg font-bold ${color ?? ''}`}>{value}</div></div>
 }
 
+function PieCard({ title, data, dataKey }: { title: string; data: ProviderStat[]; dataKey: string; color?: string }) {
+  // 过滤掉值为 0 的
+  const filtered = data.filter(d => (d as unknown as Record<string, number>)[dataKey] > 0)
+  if (filtered.length === 0) return (
+    <div className="text-center">
+      <div className="text-xs text-gray-500 mb-2">{title}</div>
+      <div className="h-[160px] flex items-center justify-center text-gray-600 text-xs">无数据</div>
+    </div>
+  )
+  return (
+    <div className="text-center">
+      <div className="text-xs text-gray-500 mb-2">{title}</div>
+      <ResponsiveContainer width="100%" height={160}>
+        <PieChart>
+          <Pie data={filtered} dataKey={dataKey} nameKey="provider"
+            cx="50%" cy="50%" outerRadius={55}
+            label={({ name, percent }) => `${name ?? ''} ${((percent ?? 0) * 100).toFixed(0)}%`}
+            labelLine={false} fontSize={10}>
+            {filtered.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+          </Pie>
+          <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 11 }}
+            formatter={(v) => fmtTokens(Number(v ?? 0))} />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
 function Empty() {
-  return <div className="h-[220px] flex items-center justify-center text-gray-600 text-sm">暂无数据</div>
+  return <div className="h-[160px] flex items-center justify-center text-gray-600 text-sm">暂无数据</div>
 }
