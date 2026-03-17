@@ -119,19 +119,7 @@ function ProvidersTab() {
 
       {/* Provider 列表 */}
       {Object.entries(config.providers).map(([name, prov]) => (
-        <div key={name} className="bg-gray-800 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-gray-300">{name}</h3>
-            {prov.protocol && <span className="text-xs bg-gray-700 px-2 py-0.5 rounded text-gray-400">{prov.protocol}</span>}
-          </div>
-          <div className="space-y-2 text-sm">
-            {prov.baseURL && (
-              <div><span className="text-gray-500">baseURL:</span> <span className="text-gray-300 font-mono">{prov.baseURL}</span></div>
-            )}
-            <div><span className="text-gray-500">API Key:</span> <span className="text-gray-300 font-mono">{prov.apiKey.slice(0, 8)}{'•'.repeat(20)}</span></div>
-            <div><span className="text-gray-500">Models:</span> <span className="text-gray-300">{prov.models.join(', ')}</span></div>
-          </div>
-        </div>
+        <ProviderCard key={name} name={name} provider={prov} />
       ))}
 
       {/* 保存按钮 */}
@@ -267,6 +255,33 @@ function Field({ label, value, onChange, placeholder, type = 'text' }: {
       <label className="text-xs text-gray-400 block mb-1">{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         className="w-full bg-gray-900 text-sm rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-blue-500" />
+    </div>
+  )
+}
+
+function ProviderCard({ name, provider }: { name: string; provider: ProviderConfig }) {
+  const [showKey, setShowKey] = useState(false)
+  return (
+    <div className="bg-gray-800 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium text-gray-300">{name}</h3>
+        {provider.protocol && <span className="text-xs bg-gray-700 px-2 py-0.5 rounded text-gray-400">{provider.protocol}</span>}
+      </div>
+      <div className="space-y-2 text-sm">
+        {provider.baseURL && (
+          <div><span className="text-gray-500">baseURL:</span> <span className="text-gray-300 font-mono text-xs">{provider.baseURL}</span></div>
+        )}
+        <div className="flex items-center gap-2">
+          <span className="text-gray-500">API Key:</span>
+          <span className="text-gray-300 font-mono text-xs">
+            {showKey ? provider.apiKey : `${provider.apiKey.slice(0, 8)}${'•'.repeat(Math.min(provider.apiKey.length - 8, 24))}`}
+          </span>
+          <button onClick={() => setShowKey(!showKey)} className="text-xs text-blue-400 hover:text-blue-300">
+            {showKey ? '隐藏' : '显示'}
+          </button>
+        </div>
+        <div><span className="text-gray-500">Models:</span> <span className="text-gray-300">{provider.models.join(', ')}</span></div>
+      </div>
     </div>
   )
 }

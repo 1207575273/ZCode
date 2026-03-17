@@ -38,29 +38,45 @@ export function createApiRoutes(): Hono {
       const weekStart = new Date(now); weekStart.setDate(weekStart.getDate() - weekStart.getDay()); weekStart.setHours(0, 0, 0, 0)
       const monthStart = new Date(now); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
 
-      const statsByRange = (since: string) => db.prepare(`
-        SELECT provider, model,
-          COALESCE(SUM(input_tokens), 0) as totalInput,
-          COALESCE(SUM(output_tokens), 0) as totalOutput,
-          COALESCE(SUM(cost_amount), 0) as totalCost,
-          cost_currency as currency,
-          COUNT(*) as callCount
-        FROM usage_logs WHERE timestamp >= ?
-        GROUP BY provider, model, cost_currency
-        ORDER BY totalCost DESC
-      `).all(since)
+      // 构建 WHERE 子句（支持 from + to 范围）
+      const buildWhere = (since: string, until?: string) => {
+        const clauses: string[] = []
+        const params: string[] = []
+        if (since) { clauses.push('timestamp >= ?'); params.push(since) }
+        if (until) { clauses.push('timestamp <= ?'); params.push(until) }
+        return { where: clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '', params }
+      }
 
-      // 按 provider 分组的饼图数据
-      const byProvider = (since: string) => db.prepare(`
-        SELECT provider,
-          COALESCE(SUM(input_tokens + output_tokens), 0) as totalTokens,
-          COALESCE(SUM(cost_amount), 0) as totalCost,
-          cost_currency as currency,
-          COUNT(*) as callCount
-        FROM usage_logs WHERE timestamp >= ?
-        GROUP BY provider, cost_currency
-        ORDER BY totalTokens DESC
-      `).all(since)
+      const statsByRange = (since: string, until?: string) => {
+        const { where, params } = buildWhere(since, until)
+        return db.prepare(`
+          SELECT provider, model,
+            COALESCE(SUM(input_tokens), 0) as totalInput,
+            COALESCE(SUM(output_tokens), 0) as totalOutput,
+            COALESCE(SUM(cache_read), 0) as totalCacheRead,
+            COALESCE(SUM(cache_write), 0) as totalCacheWrite,
+            COALESCE(SUM(cost_amount), 0) as totalCost,
+            cost_currency as currency,
+            COUNT(*) as callCount
+          FROM usage_logs ${where}
+          GROUP BY provider, model, cost_currency
+          ORDER BY totalCost DESC
+        `).all(...params)
+      }
+
+      const byProvider = (since: string, until?: string) => {
+        const { where, params } = buildWhere(since, until)
+        return db.prepare(`
+          SELECT provider,
+            COALESCE(SUM(input_tokens + output_tokens + cache_read + cache_write), 0) as totalTokens,
+            COALESCE(SUM(cost_amount), 0) as totalCost,
+            cost_currency as currency,
+            COUNT(*) as callCount
+          FROM usage_logs ${where}
+          GROUP BY provider, cost_currency
+          ORDER BY totalTokens DESC
+        `).all(...params)
+      }
 
       // 最近 7 天每日趋势
       const dailyTrend = db.prepare(`
@@ -76,10 +92,14 @@ export function createApiRoutes(): Hono {
 
       const sessions = sessionStore.list({ limit: 5 })
 
+      const customFrom = c.req.query('from')
+      const customTo = c.req.query('to')
+
       return c.json({
         today: { stats: statsByRange(todayStart.toISOString()), byProvider: byProvider(todayStart.toISOString()) },
         week: { stats: statsByRange(weekStart.toISOString()), byProvider: byProvider(weekStart.toISOString()) },
         month: { stats: statsByRange(monthStart.toISOString()), byProvider: byProvider(monthStart.toISOString()) },
+        custom: customFrom ? { stats: statsByRange(customFrom, customTo), byProvider: byProvider(customFrom, customTo) } : null,
         dailyTrend,
         recentSessions: sessions,
       })
