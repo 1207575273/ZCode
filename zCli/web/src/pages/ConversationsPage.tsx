@@ -11,7 +11,8 @@ interface SessionSummary {
   model: string
   provider: string
   messageCount: number
-  createdAt: string
+  updatedAt: string
+  firstMessage: string
 }
 
 interface SessionDetail {
@@ -72,7 +73,7 @@ function ConversationList() {
               </div>
               <div className="text-right">
                 <div className="text-xs text-gray-400">{s.messageCount} 条消息</div>
-                <div className="text-xs text-gray-500">{new Date(s.createdAt).toLocaleString()}</div>
+                <div className="text-xs text-gray-500">{new Date(s.updatedAt).toLocaleString()}</div>
               </div>
             </Link>
           ))}

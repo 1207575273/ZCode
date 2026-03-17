@@ -11,7 +11,7 @@ interface ProviderStat { provider: string; totalTokens: number; totalCost: numbe
 interface ModelStat { provider: string; model: string; totalInput: number; totalOutput: number; totalCacheRead: number; totalCacheWrite: number; totalCost: number; currency: string; callCount: number }
 interface TrendPoint { date: string; totalInput: number; totalOutput: number; totalCost: number; callCount: number }
 interface RangeData { stats: ModelStat[]; byProvider: ProviderStat[]; trend: TrendPoint[] }
-interface SessionSummary { sessionId: string; model: string; provider: string; messageCount: number; createdAt: string }
+interface SessionSummary { sessionId: string; model: string; provider: string; firstMessage: string; updatedAt: string; fileSize: number }
 interface OverviewData { today: RangeData; week: RangeData; month: RangeData; custom: RangeData | null; recentSessions: SessionSummary[] }
 
 type RangeTab = 'today' | 'week' | 'month' | 'custom'
@@ -181,7 +181,7 @@ export function OverviewPage() {
           else if (tab === 'month') { since = new Date(now); since.setDate(1); since.setHours(0, 0, 0, 0) }
           else { since = new Date(customFrom) }
 
-          const filtered = data.recentSessions.filter(s => new Date(s.createdAt) >= since)
+          const filtered = data.recentSessions.filter(s => new Date(s.updatedAt) >= since)
           if (filtered.length === 0) return <p className="text-gray-600 text-sm">该时间段无会话</p>
           return (
             <div className="space-y-1">
@@ -192,7 +192,7 @@ export function OverviewPage() {
                     <span className="text-xs font-mono text-gray-500">{s.sessionId.slice(0, 8)}</span>
                     <span className="text-xs bg-gray-700 px-1.5 py-0.5 rounded">{s.model}</span>
                   </div>
-                  <span className="text-xs text-gray-500">{new Date(s.createdAt).toLocaleString()}</span>
+                  <span className="text-xs text-gray-500">{new Date(s.updatedAt).toLocaleString()}</span>
                 </Link>
               ))}
             </div>
