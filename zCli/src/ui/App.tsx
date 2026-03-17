@@ -30,12 +30,25 @@ import { ForkPanel } from './ForkPanel.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
 import { sessionStore, toProjectSlug } from '@persistence/index.js'
 import { tokenMeter } from './useChat.js'
-import { skillStore, fileIndex, bootstrapAll, getBootstrapStatus, startMcpBackground, getMcpTiming, isDevMode, getCurrentSessionId } from '@core/bootstrap.js'
+import {
+  skillStore,
+  fileIndex,
+  bootstrapAll,
+  getBootstrapStatus,
+  startMcpBackground,
+  getMcpTiming,
+  isDevMode,
+  getCurrentSessionId,
+} from '@core/bootstrap.js'
 import type { BootstrapTimings } from '@core/bootstrap.js'
 import { AtResolver } from '@utils/at-resolver.js'
 import { enterAlternateScreen } from './terminal-screen.js'
 import { useTerminalSize } from './useTerminalSize.js'
-import { AtSuggestion, createSearchItem, createBrowseItem } from './AtSuggestion.js'
+import {
+  AtSuggestion,
+  createSearchItem,
+  createBrowseItem,
+} from './AtSuggestion.js'
 import type { AtSuggestionItem } from './AtSuggestion.js'
 
 /**
@@ -119,7 +132,10 @@ export function App({
     if (!showResumePanel) return { currentProjectSessions: [], allSessions: [] }
     const slug = toProjectSlug(cwd)
     return {
-      currentProjectSessions: sessionStore.list({ projectSlug: slug, limit: 10 }),
+      currentProjectSessions: sessionStore.list({
+        projectSlug: slug,
+        limit: 10,
+      }),
       allSessions: sessionStore.list({ limit: 10 }),
     }
   }, [showResumePanel, cwd])
@@ -128,7 +144,7 @@ export function App({
   const recentSessions = useMemo(() => {
     try {
       const slug = toProjectSlug(cwd)
-      return sessionStore.list({ projectSlug: slug, limit: 3 }).map(s => ({
+      return sessionStore.list({ projectSlug: slug, limit: 3 }).map((s) => ({
         firstMessage: s.firstMessage,
         updatedAt: s.updatedAt,
       }))
@@ -208,7 +224,9 @@ export function App({
   const modelItems: ModelItem[] = useMemo(() => {
     const config = configManager.load()
     const items: ModelItem[] = []
-    for (const [providerKey, providerConfig] of Object.entries(config.providers)) {
+    for (const [providerKey, providerConfig] of Object.entries(
+      config.providers
+    )) {
       if (!providerConfig) continue
       for (const m of providerConfig.models) {
         items.push({ provider: providerKey, model: m })
@@ -223,16 +241,26 @@ export function App({
     const query = inputValue.slice(1).toLowerCase()
 
     // 常规指令
-    const cmdItems: SuggestionItem[] = registry.getAll()
-      .filter(cmd => cmd.name.startsWith(query) || cmd.aliases?.some(a => a.startsWith(query)))
+    const cmdItems: SuggestionItem[] = registry
+      .getAll()
+      .filter(
+        (cmd) =>
+          cmd.name.startsWith(query) ||
+          cmd.aliases?.some((a) => a.startsWith(query))
+      )
 
     // Skills 也作为建议项混入
-    const skillItems: SuggestionItem[] = skillStore.getAll()
-      .filter(s => (s.userInvocable ?? true) && s.name.startsWith(query))
-      .map(s => ({ name: s.name, description: s.description, source: s.source }))
+    const skillItems: SuggestionItem[] = skillStore
+      .getAll()
+      .filter((s) => (s.userInvocable ?? true) && s.name.startsWith(query))
+      .map((s) => ({
+        name: s.name,
+        description: s.description,
+        source: s.source,
+      }))
 
     return [...cmdItems, ...skillItems]
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputValue, registry, skillsReady])
   suggestionsRef.current = suggestions
 
@@ -254,13 +282,13 @@ export function App({
     // 浏览模式：刚输入 @ 或 @dir/
     if (query.length === 0 || query.endsWith('/')) {
       const dirPrefix = query // "" 或 "src/" 等
-      return fileIndex.listEntries(dirPrefix, 30).map(e =>
-        createBrowseItem(e.name, e.fullPath, e.isDir)
-      )
+      return fileIndex
+        .listEntries(dirPrefix, 30)
+        .map((e) => createBrowseItem(e.name, e.fullPath, e.isDir))
     }
     // 搜索模式：模糊匹配
-    return fileIndex.search(query, 20).map(r => createSearchItem(r.path))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return fileIndex.search(query, 20).map((r) => createSearchItem(r.path))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputValue, fileIndexReady])
   atSuggestionsRef.current = atSuggestions
 
@@ -272,338 +300,420 @@ export function App({
     atSuggestionIndexRef.current = 0
   }, [inputValue])
 
-  const handleSubmit = useCallback((input: string) => {
-    setInputValue('')
-    let trimmed = input.trim()
+  const handleSubmit = useCallback(
+    (input: string) => {
+      setInputValue('')
+      let trimmed = input.trim()
 
-    // / 建议浮层可见时，使用当前选中的建议项替代原始输入
-    // （用户可能只输入了 / 或 /h，但方向键选中了 /hello-world）
-    // 必须在 guard 之前，否则纯 "/" 输入会被提前过滤
-    const activeSuggestions = suggestionsRef.current
-    if (activeSuggestions.length > 0 && trimmed.startsWith('/')) {
-      const selected = activeSuggestions[suggestionIndexRef.current]
-      if (selected) {
-        trimmed = '/' + selected.name
+      // / 建议浮层可见时，使用当前选中的建议项替代原始输入
+      // （用户可能只输入了 / 或 /h，但方向键选中了 /hello-world）
+      // 必须在 guard 之前，否则纯 "/" 输入会被提前过滤
+      const activeSuggestions = suggestionsRef.current
+      if (activeSuggestions.length > 0 && trimmed.startsWith('/')) {
+        const selected = activeSuggestions[suggestionIndexRef.current]
+        if (selected) {
+          trimmed = '/' + selected.name
+        }
       }
-    }
 
-    // @ 建议浮层可见时，Enter 行为：
-    // - 选中目录 → 导航进入（追加目录路径，不加空格）
-    // - 选中文件 → 补全完整路径并加空格
-    const activeAtSuggestions = atSuggestionsRef.current
-    if (activeAtSuggestions.length > 0 && activeSuggestions.length === 0) {
-      const selected = activeAtSuggestions[atSuggestionIndexRef.current]
-      if (selected) {
-        const atIdx = input.lastIndexOf('@')
-        if (atIdx !== -1) {
-          if (selected.isDir) {
-            // 目录：导航进入，@ 后跟完整目录路径
-            setInputValue(input.slice(0, atIdx) + '@' + selected.path)
-          } else {
-            // 文件：补全路径 + 空格，结束 @ 模式
-            setInputValue(input.slice(0, atIdx) + '@' + selected.path + ' ')
+      // @ 建议浮层可见时，Enter 行为：
+      // - 选中目录 → 导航进入（追加目录路径，不加空格）
+      // - 选中文件 → 补全完整路径并加空格
+      const activeAtSuggestions = atSuggestionsRef.current
+      if (activeAtSuggestions.length > 0 && activeSuggestions.length === 0) {
+        const selected = activeAtSuggestions[atSuggestionIndexRef.current]
+        if (selected) {
+          const atIdx = input.lastIndexOf('@')
+          if (atIdx !== -1) {
+            if (selected.isDir) {
+              // 目录：导航进入，@ 后跟完整目录路径
+              setInputValue(input.slice(0, atIdx) + '@' + selected.path)
+            } else {
+              // 文件：补全路径 + 空格，结束 @ 模式
+              setInputValue(input.slice(0, atIdx) + '@' + selected.path + ' ')
+            }
+            setInputResetKey((k) => k + 1)
+            return
           }
-          setInputResetKey(k => k + 1)
+        }
+      }
+
+      if (!trimmed || trimmed === '/') return
+
+      // /exit 和 /quit 不通过 CommandRegistry，直接退出应用
+      if (trimmed === '/exit' || trimmed === '/quit') {
+        exit()
+        return
+      }
+
+      // 斜杠指令分发（含 skill fallback）
+      const result = registry.dispatch(trimmed)
+
+      // Skill fallback：registry 不认识的 /xxx 命令，检查是否是 skill 名称
+      // /commit → 提交用户消息让 LLM 调用 skill 工具
+      // /commit <args> → 带参数的 skill 调用
+      if (
+        result.handled &&
+        result.action?.type === 'error' &&
+        trimmed.startsWith('/')
+      ) {
+        const parts = trimmed.slice(1).split(/\s+/)
+        const skillName = parts[0] ?? ''
+        const skillArgs = parts.slice(1).join(' ')
+        const matchedSkill = skillStore
+          .getAll()
+          .find((s) => s.name === skillName)
+        if (matchedSkill) {
+          const prompt = skillArgs
+            ? `Use the "${skillName}" skill. ${skillArgs}`
+            : `Use the "${skillName}" skill.`
+          if (!hasClearedRef.current) {
+            hasClearedRef.current = true
+            enterAlternateScreen()
+          }
+          submit(prompt)
           return
         }
       }
-    }
 
-    if (!trimmed || trimmed === '/') return
+      if (result.handled) {
+        const action = result.action
+        if (action) {
+          switch (action.type) {
+            case 'clear_messages':
+              clearMessages()
+              return
+            case 'show_help':
+              appendSystemMessage(action.content)
+              return
+            case 'show_model_picker':
+              setShowModelPicker(true)
+              return
+            case 'switch_model': {
+              let targetProvider = action.provider
+              let targetModel = action.model
+              // 如果 provider 为空，从 modelItems 里匹配 model 名找对应 provider
+              if (!targetProvider) {
+                const found = modelItems.find(
+                  (item) => item.model === action.model
+                )
+                if (found) {
+                  targetProvider = found.provider
+                  targetModel = found.model
+                }
+              }
+              if (targetProvider) {
+                switchModel(targetProvider, targetModel)
+                appendSystemMessage(
+                  `已切换到 ${targetModel} (${targetProvider})`
+                )
+              } else {
+                appendSystemMessage(`未找到模型: ${action.model}`)
+              }
+              return
+            }
+            case 'show_usage': {
+              const session = tokenMeter.getSessionStats()
+              const todayRows = tokenMeter.getTodayStats()
+              const monthRows = tokenMeter.getMonthStats()
 
-    // /exit 和 /quit 不通过 CommandRegistry，直接退出应用
-    if (trimmed === '/exit' || trimmed === '/quit') {
-      exit()
-      return
-    }
+              const fmt = (n: number) =>
+                n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n)
+              const currencySymbol = (c: string) => (c === 'CNY' ? '¥' : '$')
+              const fmtCostMap = (m: Record<string, number>) => {
+                const parts = Object.entries(m)
+                  .filter(([, v]) => v > 0)
+                  .map(([c, v]) => `${currencySymbol(c)}${v.toFixed(4)}`)
+                return parts.length > 0 ? parts.join(' + ') : '--'
+              }
+              const fmtAggRows = (
+                rows: Array<{ totalCost: number; currency: string }>
+              ) => {
+                const parts = rows
+                  .filter((r) => r.totalCost > 0)
+                  .map(
+                    (r) =>
+                      `${currencySymbol(r.currency)}${r.totalCost.toFixed(4)}`
+                  )
+                return parts.length > 0 ? parts.join(' + ') : '--'
+              }
+              const sumTokens = (
+                rows: Array<{
+                  totalInputTokens: number
+                  totalOutputTokens: number
+                  callCount: number
+                }>
+              ) => {
+                let inp = 0,
+                  out = 0,
+                  calls = 0
+                for (const r of rows) {
+                  inp += r.totalInputTokens
+                  out += r.totalOutputTokens
+                  calls += r.callCount
+                }
+                return { inp, out, calls }
+              }
+              const td = sumTokens(todayRows)
+              const mt = sumTokens(monthRows)
 
-    // 斜杠指令分发（含 skill fallback）
-    const result = registry.dispatch(trimmed)
+              const text = [
+                '── Token Usage ──',
+                '',
+                `本次会话:  ${fmt(session.totalInputTokens)} in / ${fmt(session.totalOutputTokens)} out | ${fmtCostMap(session.costByCurrency)} (${session.callCount} calls)`,
+                `今日汇总:  ${fmt(td.inp)} in / ${fmt(td.out)} out | ${fmtAggRows(todayRows)} (${td.calls} calls)`,
+                `本月汇总:  ${fmt(mt.inp)} in / ${fmt(mt.out)} out | ${fmtAggRows(monthRows)} (${mt.calls} calls)`,
+              ].join('\n')
+              appendSystemMessage(text)
+              return
+            }
+            case 'run_gc': {
+              const fmtSize = (bytes: number) => {
+                if (bytes >= 1024 * 1024)
+                  return (bytes / 1024 / 1024).toFixed(1) + ' MB'
+                if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB'
+                return bytes + ' B'
+              }
 
-    // Skill fallback：registry 不认识的 /xxx 命令，检查是否是 skill 名称
-    // /commit → 提交用户消息让 LLM 调用 skill 工具
-    // /commit <args> → 带参数的 skill 调用
-    if (result.handled && result.action?.type === 'error' && trimmed.startsWith('/')) {
-      const parts = trimmed.slice(1).split(/\s+/)
-      const skillName = parts[0] ?? ''
-      const skillArgs = parts.slice(1).join(' ')
-      const matchedSkill = skillStore.getAll().find(s => s.name === skillName)
-      if (matchedSkill) {
-        const prompt = skillArgs
-          ? `Use the "${skillName}" skill. ${skillArgs}`
-          : `Use the "${skillName}" skill.`
-        if (!hasClearedRef.current) {
-          hasClearedRef.current = true
-          enterAlternateScreen()
+              const opts = {
+                target: action.target,
+                ...(action.days !== null
+                  ? {
+                      sessionRetentionDays: action.days,
+                      usageRetentionDays: action.days,
+                    }
+                  : {}),
+              }
+
+              if (action.dryRun) {
+                const stats = getCleanupStats(opts)
+                const lines = [
+                  '── 数据清理预览 (dry-run) ──',
+                  '',
+                  `会话文件:  ${stats.sessions.totalFiles} 个文件, 共 ${fmtSize(stats.sessions.totalSizeBytes)}`,
+                  `  过期:    ${stats.sessions.expiredFiles} 个文件 (${fmtSize(stats.sessions.expiredSizeBytes)})`,
+                  '',
+                  `用量记录:  ${stats.usage.totalRows} 条`,
+                  `  过期:    ${stats.usage.expiredRows} 条`,
+                ]
+                appendSystemMessage(lines.join('\n'))
+              } else {
+                const stats = getCleanupStats(opts)
+                if (
+                  stats.sessions.expiredFiles === 0 &&
+                  stats.usage.expiredRows === 0
+                ) {
+                  appendSystemMessage('没有需要清理的过期数据。')
+                } else {
+                  const result = executeCleanup(opts)
+                  const lines = ['── 清理完成 ──', '']
+                  if (result.deletedSessionFiles > 0) {
+                    lines.push(
+                      `✓ 已清理 ${result.deletedSessionFiles} 个会话文件 (${fmtSize(result.deletedSessionBytes)})`
+                    )
+                  }
+                  if (result.deletedUsageRows > 0) {
+                    lines.push(`✓ 已清理 ${result.deletedUsageRows} 条用量记录`)
+                  }
+                  appendSystemMessage(lines.join('\n'))
+                }
+              }
+              return
+            }
+            case 'show_resume_panel':
+              setShowResumePanel(true)
+              return
+            case 'show_fork_panel':
+              setShowForkPanel(true)
+              return
+            case 'show_mcp_status':
+              setMcpLoading(true)
+              setMcpServers(null)
+              void (async () => {
+                try {
+                  const servers = await getMcpInfo()
+                  setMcpServers(servers)
+                } catch (err: unknown) {
+                  const message =
+                    err instanceof Error ? err.message : String(err)
+                  appendSystemMessage(`MCP 状态获取失败: ${message}`)
+                } finally {
+                  setMcpLoading(false)
+                }
+              })()
+              return
+            case 'list_skills':
+              {
+                // bootstrapAll 已在 mount 时启动，此时 skills 大概率已就绪
+                const skills = skillStore.getAll()
+                if (skills.length === 0) {
+                  appendSystemMessage('No skills available.')
+                } else {
+                  const lines = ['── Available Skills ──', '']
+                  for (const s of skills) {
+                    const tag =
+                      s.source === 'builtin'
+                        ? ' [built-in]'
+                        : s.source === 'project'
+                          ? ' [project]'
+                          : ''
+                    lines.push(`  ${s.name}${tag}  ${s.description}`)
+                  }
+                  lines.push('', 'Usage: /skills <name> to load a skill')
+                  appendSystemMessage(lines.join('\n'))
+                }
+              }
+              return
+            case 'load_skill':
+              skillStore.getContent(action.name).then((content) => {
+                if (!content) {
+                  appendSystemMessage(
+                    `Skill "${action.name}" not found. Use /skills to list available skills.`
+                  )
+                } else {
+                  appendSystemMessage(
+                    `── Skill loaded: ${action.name} ──\n\n${content}`
+                  )
+                }
+              })
+              return
+            case 'bridge_status': {
+              const running = webEnabled ?? false
+              if (running) {
+                const sid = getCurrentSessionId()
+                appendSystemMessage(
+                  `Bridge Server 运行中 (port 9800)\n当前 session: ${sid ?? '未创建'}\nWeb UI: /session/${sid ?? ''}`
+                )
+              } else {
+                appendSystemMessage(
+                  'Bridge Server 未启动。使用 --web 参数启动。'
+                )
+              }
+              return
+            }
+            case 'bridge_stop': {
+              fetch('/api/bridge/stop', { method: 'POST' })
+                .then(() => appendSystemMessage('Bridge Server 已关闭'))
+                .catch(() =>
+                  appendSystemMessage('Bridge Server 未运行或关闭失败')
+                )
+              return
+            }
+            case 'error':
+              appendSystemMessage(action.message)
+              return
+          }
         }
-        submit(prompt)
         return
       }
-    }
 
-    if (result.handled) {
-      const action = result.action
-      if (action) {
-        switch (action.type) {
-          case 'clear_messages':
-            clearMessages()
-            return
-          case 'show_help':
-            appendSystemMessage(action.content)
-            return
-          case 'show_model_picker':
-            setShowModelPicker(true)
-            return
-          case 'switch_model': {
-            let targetProvider = action.provider
-            let targetModel = action.model
-            // 如果 provider 为空，从 modelItems 里匹配 model 名找对应 provider
-            if (!targetProvider) {
-              const found = modelItems.find(item => item.model === action.model)
-              if (found) {
-                targetProvider = found.provider
-                targetModel = found.model
-              }
-            }
-            if (targetProvider) {
-              switchModel(targetProvider, targetModel)
-              appendSystemMessage(`已切换到 ${targetModel} (${targetProvider})`)
-            } else {
-              appendSystemMessage(`未找到模型: ${action.model}`)
-            }
-            return
-          }
-          case 'show_usage': {
-            const session = tokenMeter.getSessionStats()
-            const todayRows = tokenMeter.getTodayStats()
-            const monthRows = tokenMeter.getMonthStats()
-
-            const fmt = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n)
-            const currencySymbol = (c: string) => c === 'CNY' ? '¥' : '$'
-            const fmtCostMap = (m: Record<string, number>) => {
-              const parts = Object.entries(m).filter(([, v]) => v > 0).map(([c, v]) => `${currencySymbol(c)}${v.toFixed(4)}`)
-              return parts.length > 0 ? parts.join(' + ') : '--'
-            }
-            const fmtAggRows = (rows: Array<{ totalCost: number; currency: string }>) => {
-              const parts = rows.filter(r => r.totalCost > 0).map(r => `${currencySymbol(r.currency)}${r.totalCost.toFixed(4)}`)
-              return parts.length > 0 ? parts.join(' + ') : '--'
-            }
-            const sumTokens = (rows: Array<{ totalInputTokens: number; totalOutputTokens: number; callCount: number }>) => {
-              let inp = 0, out = 0, calls = 0
-              for (const r of rows) { inp += r.totalInputTokens; out += r.totalOutputTokens; calls += r.callCount }
-              return { inp, out, calls }
-            }
-            const td = sumTokens(todayRows)
-            const mt = sumTokens(monthRows)
-
-            const text = [
-              '── Token Usage ──',
-              '',
-              `本次会话:  ${fmt(session.totalInputTokens)} in / ${fmt(session.totalOutputTokens)} out | ${fmtCostMap(session.costByCurrency)} (${session.callCount} calls)`,
-              `今日汇总:  ${fmt(td.inp)} in / ${fmt(td.out)} out | ${fmtAggRows(todayRows)} (${td.calls} calls)`,
-              `本月汇总:  ${fmt(mt.inp)} in / ${fmt(mt.out)} out | ${fmtAggRows(monthRows)} (${mt.calls} calls)`,
-            ].join('\n')
-            appendSystemMessage(text)
-            return
-          }
-          case 'run_gc': {
-            const fmtSize = (bytes: number) => {
-              if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB'
-              if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB'
-              return bytes + ' B'
-            }
-
-            const opts = {
-              target: action.target,
-              ...(action.days !== null ? { sessionRetentionDays: action.days, usageRetentionDays: action.days } : {}),
-            }
-
-            if (action.dryRun) {
-              const stats = getCleanupStats(opts)
-              const lines = [
-                '── 数据清理预览 (dry-run) ──',
-                '',
-                `会话文件:  ${stats.sessions.totalFiles} 个文件, 共 ${fmtSize(stats.sessions.totalSizeBytes)}`,
-                `  过期:    ${stats.sessions.expiredFiles} 个文件 (${fmtSize(stats.sessions.expiredSizeBytes)})`,
-                '',
-                `用量记录:  ${stats.usage.totalRows} 条`,
-                `  过期:    ${stats.usage.expiredRows} 条`,
-              ]
-              appendSystemMessage(lines.join('\n'))
-            } else {
-              const stats = getCleanupStats(opts)
-              if (stats.sessions.expiredFiles === 0 && stats.usage.expiredRows === 0) {
-                appendSystemMessage('没有需要清理的过期数据。')
-              } else {
-                const result = executeCleanup(opts)
-                const lines = ['── 清理完成 ──', '']
-                if (result.deletedSessionFiles > 0) {
-                  lines.push(`✓ 已清理 ${result.deletedSessionFiles} 个会话文件 (${fmtSize(result.deletedSessionBytes)})`)
-                }
-                if (result.deletedUsageRows > 0) {
-                  lines.push(`✓ 已清理 ${result.deletedUsageRows} 条用量记录`)
-                }
-                appendSystemMessage(lines.join('\n'))
-              }
-            }
-            return
-          }
-          case 'show_resume_panel':
-            setShowResumePanel(true)
-            return
-          case 'show_fork_panel':
-            setShowForkPanel(true)
-            return
-          case 'show_mcp_status':
-            setMcpLoading(true)
-            setMcpServers(null)
-            void (async () => {
-              try {
-                const servers = await getMcpInfo()
-                setMcpServers(servers)
-              } catch (err: unknown) {
-                const message = err instanceof Error ? err.message : String(err)
-                appendSystemMessage(`MCP 状态获取失败: ${message}`)
-              } finally {
-                setMcpLoading(false)
-              }
-            })()
-            return
-          case 'list_skills': {
-            // bootstrapAll 已在 mount 时启动，此时 skills 大概率已就绪
-            const skills = skillStore.getAll()
-            if (skills.length === 0) {
-              appendSystemMessage('No skills available.')
-            } else {
-              const lines = ['── Available Skills ──', '']
-              for (const s of skills) {
-                const tag = s.source === 'builtin' ? ' [built-in]' : s.source === 'project' ? ' [project]' : ''
-                lines.push(`  ${s.name}${tag}  ${s.description}`)
-              }
-              lines.push('', 'Usage: /skills <name> to load a skill')
-              appendSystemMessage(lines.join('\n'))
-            }
-          }
-            return
-          case 'load_skill':
-            skillStore.getContent(action.name).then(content => {
-              if (!content) {
-                appendSystemMessage(`Skill "${action.name}" not found. Use /skills to list available skills.`)
-              } else {
-                appendSystemMessage(`── Skill loaded: ${action.name} ──\n\n${content}`)
-              }
-            })
-            return
-          case 'bridge_status': {
-            const running = webEnabled ?? false
-            if (running) {
-              const sid = getCurrentSessionId()
-              appendSystemMessage(`Bridge Server 运行中 (port 9800)\n当前 session: ${sid ?? '未创建'}\nWeb UI: http://localhost:9800/session/${sid ?? ''}`)
-            } else {
-              appendSystemMessage('Bridge Server 未启动。使用 --web 参数启动。')
-            }
-            return
-          }
-          case 'bridge_stop': {
-            fetch('http://localhost:9800/api/bridge/stop', { method: 'POST' })
-              .then(() => appendSystemMessage('Bridge Server 已关闭'))
-              .catch(() => appendSystemMessage('Bridge Server 未运行或关闭失败'))
-            return
-          }
-          case 'error':
-            appendSystemMessage(action.message)
-            return
-        }
+      // 非指令，发送给 LLM
+      // 首次提交前切换到备用屏幕，避免 WelcomeScreen 残留被 Ink <Static> 冻结到输出中
+      if (!hasClearedRef.current) {
+        hasClearedRef.current = true
+        enterAlternateScreen()
       }
-      return
-    }
 
-    // 非指令，发送给 LLM
-    // 首次提交前切换到备用屏幕，避免 WelcomeScreen 残留被 Ink <Static> 冻结到输出中
-    if (!hasClearedRef.current) {
-      hasClearedRef.current = true
-      enterAlternateScreen()
-    }
-
-    // @ 文件引用解析：如果输入包含 @path 引用，在消息前注入 file-references context
-    const { context, rawInput } = atResolver.resolve(trimmed)
-    const finalMessage = context ? `${context}\n\n${rawInput}` : rawInput
-    submit(finalMessage)
-  }, [registry, clearMessages, appendSystemMessage, switchModel, submit, modelItems, exit, getMcpInfo, atResolver])
+      // @ 文件引用解析：如果输入包含 @path 引用，在消息前注入 file-references context
+      const { context, rawInput } = atResolver.resolve(trimmed)
+      const finalMessage = context ? `${context}\n\n${rawInput}` : rawInput
+      submit(finalMessage)
+    },
+    [
+      registry,
+      clearMessages,
+      appendSystemMessage,
+      switchModel,
+      submit,
+      modelItems,
+      exit,
+      getMcpInfo,
+      atResolver,
+    ]
+  )
 
   // 建议浮层按键：Arrow 导航、Tab 补全、Enter 提交选中项、Escape 取消
-  useInput((_input, key) => {
-    if (key.upArrow) {
-      setSuggestionIndex(i => {
-        const next = i <= 0 ? suggestions.length - 1 : i - 1
-        suggestionIndexRef.current = next
-        return next
-      })
-    }
-    if (key.downArrow) {
-      setSuggestionIndex(i => {
-        const next = i >= suggestions.length - 1 ? 0 : i + 1
-        suggestionIndexRef.current = next
-        return next
-      })
-    }
-    // Tab: 补全选中项到输入框（不提交，方便追加参数）
-    if (key.tab) {
-      const cmd = suggestions[suggestionIndexRef.current]
-      if (cmd) {
-        setInputValue('/' + cmd.name + ' ')
-        setInputResetKey(k => k + 1)
+  useInput(
+    (_input, key) => {
+      if (key.upArrow) {
+        setSuggestionIndex((i) => {
+          const next = i <= 0 ? suggestions.length - 1 : i - 1
+          suggestionIndexRef.current = next
+          return next
+        })
       }
-    }
-    // Enter: 不拦截，透传给 TextInput.onSubmit → handleSubmit 通过 suggestionsRef 解析选中项
-    if (key.escape) {
-      setInputValue('')
-    }
-  }, { isActive: suggestions.length > 0 })
-
-  // @ 文件建议浮层按键：Arrow 导航、Tab 补全文件路径
-  useInput((_input, key) => {
-    if (key.upArrow) {
-      setAtSuggestionIndex(i => {
-        const next = i <= 0 ? atSuggestions.length - 1 : i - 1
-        atSuggestionIndexRef.current = next
-        return next
-      })
-    }
-    if (key.downArrow) {
-      setAtSuggestionIndex(i => {
-        const next = i >= atSuggestions.length - 1 ? 0 : i + 1
-        atSuggestionIndexRef.current = next
-        return next
-      })
-    }
-    // Tab: 补全选中项 — 目录导航进入，文件补全路径
-    if (key.tab) {
-      const item = atSuggestions[atSuggestionIndexRef.current]
-      if (item) {
-        const text = inputValue
-        const atIdx = text.lastIndexOf('@')
-        if (atIdx !== -1) {
-          if (item.isDir) {
-            setInputValue(text.slice(0, atIdx) + '@' + item.path)
-          } else {
-            setInputValue(text.slice(0, atIdx) + '@' + item.path + ' ')
-          }
-          setInputResetKey(k => k + 1)
+      if (key.downArrow) {
+        setSuggestionIndex((i) => {
+          const next = i >= suggestions.length - 1 ? 0 : i + 1
+          suggestionIndexRef.current = next
+          return next
+        })
+      }
+      // Tab: 补全选中项到输入框（不提交，方便追加参数）
+      if (key.tab) {
+        const cmd = suggestions[suggestionIndexRef.current]
+        if (cmd) {
+          setInputValue('/' + cmd.name + ' ')
+          setInputResetKey((k) => k + 1)
         }
       }
-    }
-    if (key.escape) {
-      setInputValue('')
-    }
-  }, { isActive: atSuggestions.length > 0 && suggestions.length === 0 })
+      // Enter: 不拦截，透传给 TextInput.onSubmit → handleSubmit 通过 suggestionsRef 解析选中项
+      if (key.escape) {
+        setInputValue('')
+      }
+    },
+    { isActive: suggestions.length > 0 }
+  )
+
+  // @ 文件建议浮层按键：Arrow 导航、Tab 补全文件路径
+  useInput(
+    (_input, key) => {
+      if (key.upArrow) {
+        setAtSuggestionIndex((i) => {
+          const next = i <= 0 ? atSuggestions.length - 1 : i - 1
+          atSuggestionIndexRef.current = next
+          return next
+        })
+      }
+      if (key.downArrow) {
+        setAtSuggestionIndex((i) => {
+          const next = i >= atSuggestions.length - 1 ? 0 : i + 1
+          atSuggestionIndexRef.current = next
+          return next
+        })
+      }
+      // Tab: 补全选中项 — 目录导航进入，文件补全路径
+      if (key.tab) {
+        const item = atSuggestions[atSuggestionIndexRef.current]
+        if (item) {
+          const text = inputValue
+          const atIdx = text.lastIndexOf('@')
+          if (atIdx !== -1) {
+            if (item.isDir) {
+              setInputValue(text.slice(0, atIdx) + '@' + item.path)
+            } else {
+              setInputValue(text.slice(0, atIdx) + '@' + item.path + ' ')
+            }
+            setInputResetKey((k) => k + 1)
+          }
+        }
+      }
+      if (key.escape) {
+        setInputValue('')
+      }
+    },
+    { isActive: atSuggestions.length > 0 && suggestions.length === 0 }
+  )
 
   // ModelPicker Esc 保险：在 App 层面直接监听 Esc。
   // useCallback 空依赖使 handler 引用永远稳定 → Ink 不会重复注册/注销，
   // 彻底消除重渲染期间按键丢失的竞态窗口（setShowModelPicker 是 React setter，永远稳定）
-  const handleModelPickerKey = useCallback((input: string, key: { escape: boolean }) => {
-    if (key.escape || input === 'q') setShowModelPicker(false)
-  }, [])
+  const handleModelPickerKey = useCallback(
+    (input: string, key: { escape: boolean }) => {
+      if (key.escape || input === 'q') setShowModelPicker(false)
+    },
+    []
+  )
   useInput(handleModelPickerKey, { isActive: showModelPicker })
 
   // 双击 Ctrl+C 退出计时器（参照 Claude Code：第一次提示，第二次退出）
@@ -634,7 +744,12 @@ export function App({
   return (
     <Box flexDirection="column" width="100%">
       {started ? (
-        <ChatView messages={messages} streamingMessage={streamingMessage} toolEvents={toolEvents} subAgentEvents={subAgentEvents} />
+        <ChatView
+          messages={messages}
+          streamingMessage={streamingMessage}
+          toolEvents={toolEvents}
+          subAgentEvents={subAgentEvents}
+        />
       ) : (
         <>
           {bootTimings && (
@@ -642,16 +757,27 @@ export function App({
               <Text dimColor>
                 {'bootstrap '}
                 {`${bootTimings.total.toFixed(0)}ms`}
-                {' (skills '}{bootTimings.skills.toFixed(0)}
-                {' → hooks '}{bootTimings.hooks.toFixed(0)}
-                {' → startHooks '}{bootTimings.sessionStartHooks.toFixed(0)}
-                {' | fileIndex '}{bootTimings.fileIndex.toFixed(0)}
-                {' | instructions '}{bootTimings.instructions.toFixed(0)}
-                {'ms) mcp: '}{mcpMs != null ? `${mcpMs.toFixed(0)}ms` : 'loading...'}
+                {' (skills '}
+                {bootTimings.skills.toFixed(0)}
+                {' → hooks '}
+                {bootTimings.hooks.toFixed(0)}
+                {' → startHooks '}
+                {bootTimings.sessionStartHooks.toFixed(0)}
+                {' | fileIndex '}
+                {bootTimings.fileIndex.toFixed(0)}
+                {' | instructions '}
+                {bootTimings.instructions.toFixed(0)}
+                {'ms) mcp: '}
+                {mcpMs != null ? `${mcpMs.toFixed(0)}ms` : 'loading...'}
               </Text>
             </Box>
           )}
-          <WelcomeScreen model={currentModel} provider={currentProvider} cwd={cwd} recentSessions={recentSessions} />
+          <WelcomeScreen
+            model={currentModel}
+            provider={currentProvider}
+            cwd={cwd}
+            recentSessions={recentSessions}
+          />
         </>
       )}
 
@@ -688,7 +814,10 @@ export function App({
         mcpServers != null ? (
           <McpStatusView
             servers={mcpServers}
-            onClose={() => { setMcpServers(null); setMcpLoading(false) }}
+            onClose={() => {
+              setMcpServers(null)
+              setMcpLoading(false)
+            }}
           />
         ) : (
           <Box paddingX={2} paddingY={1}>
@@ -722,19 +851,28 @@ export function App({
         />
       ) : (
         <>
-          {started && !isStreaming && (() => {
-            const s = tokenMeter.getSessionStats()
-            if (s.callCount === 0) return null
-            const fmt = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n)
-            const sym = (c: string) => c === 'CNY' ? '¥' : '$'
-            const costParts = Object.entries(s.costByCurrency).filter(([, v]) => v > 0).map(([c, v]) => `${sym(c)}${v.toFixed(4)}`)
-            const cost = costParts.length > 0 ? ` | ${costParts.join(' + ')}` : ''
-            return (
-              <Box paddingX={1}>
-                <Text dimColor>{fmt(s.totalInputTokens)} in / {fmt(s.totalOutputTokens)} out{cost}</Text>
-              </Box>
-            )
-          })()}
+          {started &&
+            !isStreaming &&
+            (() => {
+              const s = tokenMeter.getSessionStats()
+              if (s.callCount === 0) return null
+              const fmt = (n: number) =>
+                n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n)
+              const sym = (c: string) => (c === 'CNY' ? '¥' : '$')
+              const costParts = Object.entries(s.costByCurrency)
+                .filter(([, v]) => v > 0)
+                .map(([c, v]) => `${sym(c)}${v.toFixed(4)}`)
+              const cost =
+                costParts.length > 0 ? ` | ${costParts.join(' + ')}` : ''
+              return (
+                <Box paddingX={1}>
+                  <Text dimColor>
+                    {fmt(s.totalInputTokens)} in / {fmt(s.totalOutputTokens)}{' '}
+                    out{cost}
+                  </Text>
+                </Box>
+              )
+            })()}
           {isStreaming && (
             <Box paddingX={1}>
               <Text dimColor>Esc to interrupt</Text>
@@ -743,7 +881,7 @@ export function App({
           {webEnabled && (
             <Box paddingX={1}>
               <Text dimColor>Web UI: </Text>
-              <Text color="cyan">{`http://localhost:9800/session/${getCurrentSessionId() ?? ''}`}</Text>
+              <Text color="cyan">{`/session/${getCurrentSessionId() ?? ''}`}</Text>
             </Box>
           )}
           <InputBar
@@ -761,7 +899,10 @@ export function App({
       )}
 
       {suggestions.length > 0 && (
-        <CommandSuggestion items={suggestions} selectedIndex={suggestionIndex} />
+        <CommandSuggestion
+          items={suggestions}
+          selectedIndex={suggestionIndex}
+        />
       )}
 
       {atSuggestions.length > 0 && suggestions.length === 0 && (
