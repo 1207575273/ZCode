@@ -218,7 +218,7 @@ describe('DispatchAgentTool', () => {
     expect(result.output).toContain('fallback result')
   })
 
-  it('llm_usage 事件被透传', async () => {
+  it('llm_done 事件被透传', async () => {
     const registry = new ToolRegistry()
     registry.register(mockTool('read_file'))
     const provider = createMockProvider('hello')
@@ -234,7 +234,7 @@ describe('DispatchAgentTool', () => {
       tool.stream({ description: 'test', prompt: 'hello' }, ctx),
     )
 
-    const usageEvents = events.filter(e => e.type === 'llm_usage')
+    const usageEvents = events.filter(e => e.type === 'llm_done')
     expect(usageEvents.length).toBeGreaterThan(0)
   })
 })

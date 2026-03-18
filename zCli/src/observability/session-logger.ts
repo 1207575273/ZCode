@@ -70,7 +70,7 @@ export class SessionLogger {
         })
         break
 
-      case 'llm_usage':
+      case 'llm_done':
         this.#turnStats.totalInputTokens += event.inputTokens
         this.#turnStats.totalOutputTokens += event.outputTokens
         this.#turnStats.totalCacheReadTokens += event.cacheReadTokens

@@ -15,12 +15,12 @@ afterEach(() => {
 })
 
 describe('TokenMeter.consume', () => {
-  it('should_write_usage_log_on_llm_usage', () => {
+  it('should_write_usage_log_on_llm_done', () => {
     const meter = new TokenMeter(db)
     meter.bind('session-1', 'anthropic', 'claude-opus-4-6')
 
     const event: AgentEvent = {
-      type: 'llm_usage', inputTokens: 1000, outputTokens: 200,
+      type: 'llm_done', inputTokens: 1000, outputTokens: 200,
       cacheReadTokens: 500, cacheWriteTokens: 0, stopReason: 'end_turn',
     }
     meter.consume(event)
@@ -38,7 +38,7 @@ describe('TokenMeter.consume', () => {
     meter.bind('session-1', 'anthropic', 'claude-opus-4-6')
 
     const event: AgentEvent = {
-      type: 'llm_usage', inputTokens: 1_000_000, outputTokens: 100_000,
+      type: 'llm_done', inputTokens: 1_000_000, outputTokens: 100_000,
       cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn',
     }
     meter.consume(event)
@@ -54,7 +54,7 @@ describe('TokenMeter.consume', () => {
 
     // claude-opus-4-* 价格: input $5/M, output $25/M, cache_read $0.50/M, cache_write $6.25/M
     const event: AgentEvent = {
-      type: 'llm_usage', inputTokens: 0, outputTokens: 0,
+      type: 'llm_done', inputTokens: 0, outputTokens: 0,
       cacheReadTokens: 1_000_000, cacheWriteTokens: 1_000_000, stopReason: 'end_turn',
     }
     meter.consume(event)
@@ -70,7 +70,7 @@ describe('TokenMeter.consume', () => {
 
     // 四维同时非零
     const event: AgentEvent = {
-      type: 'llm_usage', inputTokens: 1_000_000, outputTokens: 100_000,
+      type: 'llm_done', inputTokens: 1_000_000, outputTokens: 100_000,
       cacheReadTokens: 500_000, cacheWriteTokens: 200_000, stopReason: 'end_turn',
     }
     meter.consume(event)
@@ -86,7 +86,7 @@ describe('TokenMeter.consume', () => {
     meter.bind('session-1', 'unknown-provider', 'unknown-model')
 
     const event: AgentEvent = {
-      type: 'llm_usage', inputTokens: 100, outputTokens: 50,
+      type: 'llm_done', inputTokens: 100, outputTokens: 50,
       cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn',
     }
     meter.consume(event)
@@ -95,7 +95,7 @@ describe('TokenMeter.consume', () => {
     expect(row.cost_amount).toBeNull()
   })
 
-  it('should_ignore_non_llm_usage_events', () => {
+  it('should_ignore_non_llm_done_events', () => {
     const meter = new TokenMeter(db)
     meter.bind('session-1', 'anthropic', 'claude-opus-4-6')
 
@@ -113,8 +113,8 @@ describe('TokenMeter.getSessionStats', () => {
     const meter = new TokenMeter(db)
     meter.bind('session-1', 'anthropic', 'claude-opus-4-6')
 
-    meter.consume({ type: 'llm_usage', inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
-    meter.consume({ type: 'llm_usage', inputTokens: 500, outputTokens: 100, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
+    meter.consume({ type: 'llm_done', inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
+    meter.consume({ type: 'llm_done', inputTokens: 500, outputTokens: 100, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
 
     const stats = meter.getSessionStats()
     expect(stats.totalInputTokens).toBe(1500)
@@ -129,7 +129,7 @@ describe('TokenMeter.getTodayStats', () => {
     const meter = new TokenMeter(db)
     meter.bind('session-1', 'anthropic', 'claude-opus-4-6')
 
-    meter.consume({ type: 'llm_usage', inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
+    meter.consume({ type: 'llm_done', inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
 
     const rows = meter.getTodayStats()
     expect(rows).toHaveLength(1)
@@ -143,11 +143,11 @@ describe('TokenMeter.getTodayStats', () => {
 
     // USD 调用
     meter.bind('session-1', 'anthropic', 'claude-opus-4-6')
-    meter.consume({ type: 'llm_usage', inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
+    meter.consume({ type: 'llm_done', inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
 
     // CNY 调用
     meter.bind('session-1', 'glm', 'glm-5')
-    meter.consume({ type: 'llm_usage', inputTokens: 500, outputTokens: 100, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
+    meter.consume({ type: 'llm_done', inputTokens: 500, outputTokens: 100, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
 
     const rows = meter.getTodayStats()
     expect(rows).toHaveLength(2)

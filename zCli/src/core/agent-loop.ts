@@ -56,7 +56,7 @@ export interface UserQuestionResult {
  *   text / tool_start / tool_done / permission_request / user_question_request / error / done
  *
  * 观测事件（SessionLogger 消费，写入 JSONL）：
- *   llm_start / llm_usage / llm_error / tool_fallback / permission_grant
+ *   llm_start / llm_done / llm_error / tool_fallback / permission_grant
  *
  * 子 Agent 事件（SubAgent 场景）：
  *   subagent_progress
@@ -69,10 +69,10 @@ export type AgentEvent =
   | { type: 'permission_request'; toolName: string; args: Record<string, unknown>; resolve: (allow: boolean) => void }
   | { type: 'user_question_request'; questions: UserQuestion[]; resolve: (result: UserQuestionResult) => void }
   | { type: 'error';              error: string }
-  | { type: 'done' }
+  | { type: 'done';               reason?: 'complete' | 'max_turns' | 'aborted' }
   // 观测事件
   | { type: 'llm_start';          provider: string; model: string; messageCount: number; systemPrompt?: string }
-  | { type: 'llm_usage';          inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; stopReason: string }
+  | { type: 'llm_done';           inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; stopReason: string }
   | { type: 'llm_error';          error: string; partialOutputTokens?: number }
   | { type: 'tool_fallback';      toolName: string; fromLevel: string; toLevel: string; reason: string }
   | { type: 'permission_grant';   toolName: string; always: boolean }
@@ -151,14 +151,15 @@ export class AgentLoop {
       if (llmResult.aborted) return
 
       if (llmResult.toolCalls.length === 0) {
-        yield { type: 'done' }
+        yield { type: 'done', reason: 'complete' }
         return
       }
 
       yield* this.#executeToolCalls(llmResult.toolCalls, history)
     }
 
-    yield { type: 'error', error: `超过最大轮次限制 (${maxTurns})` }
+    // 超过最大轮次：以 done + max_turns 结束，不再 yield error（调用方可按 reason 区分）
+    yield { type: 'done', reason: 'max_turns' }
   }
 
   // ─────────────────────────────────────────────
@@ -168,7 +169,7 @@ export class AgentLoop {
   /**
    * 调用 LLM 并收集流式输出。
    *
-   * yield: llm_start → text* → llm_usage | llm_error
+   * yield: llm_start → text* → llm_done | llm_error
    * return: 收集到的工具调用列表 + 是否因错误中止
    */
   async *#callLLM(
@@ -195,6 +196,8 @@ export class AgentLoop {
     let outputTokens = 0
     let cacheReadTokens = 0
     let cacheWriteTokens = 0
+    // 从 done chunk 中取 stopReason，经 ProviderWrapper 标准化后直接使用
+    let doneStopReason = 'end_turn'
 
     try {
       for await (const chunk of this.#provider.chat(chatRequest)) {
@@ -220,13 +223,16 @@ export class AgentLoop {
           cacheReadTokens = chunk.usage.cacheReadTokens
           cacheWriteTokens = chunk.usage.cacheWriteTokens
         }
+        if (chunk.type === 'done') {
+          doneStopReason = chunk.stopReason ?? 'end_turn'
+        }
       }
 
-      yield { type: 'llm_usage', inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, stopReason: 'end_turn' }
+      yield { type: 'llm_done', inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, stopReason: doneStopReason }
       return { toolCalls: pendingToolCalls, aborted: false }
     } catch (err) {
       if (isAbortError(err)) {
-        yield { type: 'llm_usage', inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, stopReason: 'abort' }
+        yield { type: 'llm_done', inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, stopReason: 'abort' }
       } else {
         yield makeLlmError(err instanceof Error ? err.message : String(err), outputTokens)
       }

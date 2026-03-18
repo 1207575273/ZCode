@@ -43,4 +43,6 @@ export interface StreamChunk {
   toolCall?: ToolCallContent
   usage?: TokenUsage
   error?: string
+  /** LLM 调用结束原因（done 类型时有值） */
+  stopReason?: string
 }

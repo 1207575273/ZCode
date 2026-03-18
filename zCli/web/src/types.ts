@@ -37,7 +37,7 @@ export type ServerEvent =
   | { type: 'done' }
   | { type: 'user_input'; text: string; source: 'cli' | 'web' }
   | { type: 'llm_start'; provider: string; model: string }
-  | { type: 'llm_usage'; inputTokens: number; outputTokens: number }
+  | { type: 'llm_done'; inputTokens: number; outputTokens: number; stopReason?: string }
   | { type: 'bridge_stop' }
 
 /** 客户端发送的消息 */

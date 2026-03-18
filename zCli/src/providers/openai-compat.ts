@@ -66,6 +66,8 @@ export class OpenAICompatProvider implements LLMProvider {
       }
 
       // 聚合 chunk，提取 tool_calls 和 usage
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let finishReason = 'stop'
       if (allChunks.length > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const final = allChunks.reduce((a: any, b: any) => a.concat(b))
@@ -97,9 +99,14 @@ export class OpenAICompatProvider implements LLMProvider {
             },
           }
         }
+
+        // 从 LangChain response_metadata 提取 finish_reason（fallback 链）
+        finishReason = (final as any).response_metadata?.finish_reason
+          ?? (final as any).additional_kwargs?.finish_reason
+          ?? (final.tool_calls?.length > 0 ? 'tool_calls' : 'stop')
       }
 
-      yield { type: 'done' }
+      yield { type: 'done', stopReason: finishReason }
     } catch (err) {
       dbg(`[DEBUG][${this.name}] error: ${err}\n`)
       yield { type: 'error', error: err instanceof Error ? err.message : String(err) }

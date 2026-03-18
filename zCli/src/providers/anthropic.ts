@@ -181,7 +181,7 @@ export class AnthropicProvider implements LLMProvider {
         }
       }
 
-      yield { type: 'done' }
+      yield { type: 'done', stopReason: finalMsg.stop_reason ?? 'end_turn' }
     } catch (err) {
       dbg(`[DEBUG][anthropic] error: ${err}\n`)
       yield { type: 'error', error: err instanceof Error ? err.message : String(err) }

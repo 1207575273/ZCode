@@ -1,6 +1,7 @@
 // src/providers/registry.ts
 import { AnthropicProvider } from './anthropic.js'
 import { OpenAICompatProvider } from './openai-compat.js'
+import { ProviderWrapper } from './wrapper.js'
 import type { LLMProvider } from './provider.js'
 import type { ZCliConfig } from '@config/config-manager.js'
 
@@ -23,8 +24,8 @@ export function createProvider(providerName: string, config: ZCliConfig): LLMPro
   const protocol = resolveProtocol(providerName, providerCfg.protocol)
 
   if (protocol === 'anthropic') {
-    return new AnthropicProvider(providerName, providerCfg)
+    return new ProviderWrapper(new AnthropicProvider(providerName, providerCfg))
   }
 
-  return new OpenAICompatProvider(providerName, providerCfg)
+  return new ProviderWrapper(new OpenAICompatProvider(providerName, providerCfg))
 }

@@ -62,7 +62,7 @@ describe('AgentLoop', () => {
     expect(events.some(e => e.type === 'text')).toBe(true)
   })
 
-  it('LLM 调用 — yield llm_start 和 llm_usage 事件', async () => {
+  it('LLM 调用 — yield llm_start 和 llm_done 事件', async () => {
     const provider = makeProvider([[
       { type: 'text', text: 'hi' },
       { type: 'usage', usage: { inputTokens: 100, outputTokens: 50, cacheReadTokens: 0, cacheWriteTokens: 0 } },
@@ -74,8 +74,8 @@ describe('AgentLoop', () => {
       events.push(e)
     }
     expect(events[0]?.type).toBe('llm_start')
-    expect(events.some(e => e.type === 'llm_usage')).toBe(true)
-    const usage = events.find(e => e.type === 'llm_usage') as { type: string; inputTokens: number; outputTokens: number }
+    expect(events.some(e => e.type === 'llm_done')).toBe(true)
+    const usage = events.find(e => e.type === 'llm_done') as { type: string; inputTokens: number; outputTokens: number }
     expect(usage.inputTokens).toBe(100)
     expect(usage.outputTokens).toBe(50)
   })

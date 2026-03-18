@@ -178,7 +178,7 @@ export class DispatchAgentTool implements StreamableTool {
             } satisfies AgentEvent
             break
 
-          case 'llm_usage':
+          case 'llm_done':
             // token 计量事件直接透传，SessionLogger 可统计子 Agent 消耗
             yield event
             break

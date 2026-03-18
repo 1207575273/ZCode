@@ -1,7 +1,7 @@
 // src/observability/token-meter.ts
 
 /**
- * TokenMeter — 独立观察者，订阅 AgentEvent 中的 llm_usage 事件。
+ * TokenMeter — 独立观察者，订阅 AgentEvent 中的 llm_done 事件。
  *
  * 职责：
  * - 写入 SQLite usage_logs（四维 token + 费用）
@@ -112,9 +112,9 @@ export class TokenMeter {
     this.#model = model
   }
 
-  /** 消费 AgentEvent，只处理 llm_usage */
+  /** 消费 AgentEvent，只处理 llm_done */
   consume(event: AgentEvent): void {
-    if (event.type !== 'llm_usage') return
+    if (event.type !== 'llm_done') return
     if (!this.#sessionId) return
 
     const rule = this.#resolveRule()
