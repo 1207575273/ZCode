@@ -11,7 +11,7 @@
  */
 
 import { Hono } from 'hono'
-import { existsSync, readFileSync, mkdirSync, rmSync, cpSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, mkdirSync, rmSync, cpSync, readdirSync, writeFileSync, renameSync } from 'node:fs'
 import { join, basename } from 'node:path'
 import { homedir } from 'node:os'
 import fg from 'fast-glob'
@@ -111,39 +111,88 @@ export function createPluginsRoutes(): Hono {
         return c.json({ error: 'source 不能为空' }, 400)
       }
 
-      // 构建 npx skills add 命令
-      // 安装到 ZCli 插件目录，指定 agent 为 zcli
-      const pluginsDir = zcliPluginsDir()
-      mkdirSync(pluginsDir, { recursive: true })
+      // npx skills add 安装到 cwd/.claude/skills/ 下
+      // 用临时目录执行，然后把 skill 搬到 ~/.zcli/plugins/ 下
+      const { mkdtempSync } = await import('node:fs')
+      const { tmpdir } = await import('node:os')
+      const tempDir = mkdtempSync(join(tmpdir(), 'zcli-skill-'))
 
       const args = ['skills', 'add', source, '--yes', '--copy']
       if (body.skill) {
         args.push('--skill', body.skill)
       }
 
-      // 执行 npx skills add
       const { execa } = await import('execa')
       const result = await execa('npx', args, {
-        cwd: pluginsDir,
-        timeout: 60_000,
+        cwd: tempDir,
+        timeout: 120_000,
         reject: false,
         env: { ...process.env, HOME: homedir(), USERPROFILE: homedir() },
       })
 
-      if (result.exitCode !== 0) {
-        const errMsg = result.stderr || result.stdout || `exit code ${result.exitCode}`
-        return c.json({ error: `安装失败: ${errMsg}` }, 500)
+      // npx skills 即使找不到 skill 也可能 exitCode=0，检查输出
+      const output = [result.stdout, result.stderr].filter(Boolean).join('\n')
+      if (output.includes('No matching skills found')) {
+        // 清理临时目录
+        rmSync(tempDir, { recursive: true, force: true })
+        return c.json({ error: `未找到匹配的 skill。输出:\n${output}` }, 400)
       }
 
-      // npx skills add 默认安装到 .zcli/skills/ 或当前目录
-      // 需要把安装的 skill 移到 plugins 目录结构下
-      // 先尝试扫描新增的 SKILL.md
-      const installed = scanInstalledPlugins()
+      // 扫描临时目录下安装的 skills（.claude/skills/<name>/SKILL.md）
+      const claudeSkillsDir = join(tempDir, '.claude', 'skills')
+      let installed: string[] = []
+      if (existsSync(claudeSkillsDir)) {
+        installed = readdirSync(claudeSkillsDir, { withFileTypes: true })
+          .filter(d => d.isDirectory() && existsSync(join(claudeSkillsDir, d.name, 'SKILL.md')))
+          .map(d => d.name)
+      }
+
+      if (installed.length === 0) {
+        rmSync(tempDir, { recursive: true, force: true })
+        return c.json({ error: `安装完成但未找到 SKILL.md。输出:\n${output}` }, 400)
+      }
+
+      // 搬到 ~/.zcli/plugins/<repoName>/skills/<skillName>/
+      const repoName = source.replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\//g, '--')
+      const targetPluginDir = join(zcliPluginsDir(), repoName)
+      const targetSkillsDir = join(targetPluginDir, 'skills')
+      mkdirSync(targetSkillsDir, { recursive: true })
+
+      for (const skillName of installed) {
+        const src = join(claudeSkillsDir, skillName)
+        const dst = join(targetSkillsDir, skillName)
+        if (existsSync(dst)) {
+          rmSync(dst, { recursive: true, force: true })
+        }
+        // 跨盘移动可能失败（Windows 临时目录和用户目录可能不在同一盘），
+        // 先尝试 rename（同盘零拷贝），失败回退到 cp + rm
+        try {
+          renameSync(src, dst)
+        } catch {
+          cpSync(src, dst, { recursive: true })
+        }
+      }
+
+      // 写一个 plugin.json 元数据
+      const pluginJsonPath = join(targetPluginDir, 'plugin.json')
+      if (!existsSync(pluginJsonPath)) {
+        writeFileSync(pluginJsonPath, JSON.stringify({
+          name: repoName,
+          description: `Skills from ${source}`,
+          version: '1.0.0',
+          source,
+          installedAt: new Date().toISOString(),
+        }, null, 2), 'utf-8')
+      }
+
+      // 清理临时目录
+      rmSync(tempDir, { recursive: true, force: true })
 
       return c.json({
         success: true,
-        output: result.stdout,
-        plugins: installed,
+        installed: installed,
+        pluginName: repoName,
+        message: `成功安装 ${installed.length} 个 skill: ${installed.join(', ')}`,
       })
     } catch (err) {
       return c.json({ error: String(err) }, 500)

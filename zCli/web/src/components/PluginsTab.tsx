@@ -218,14 +218,14 @@ function ClaudeImportPanel() {
 // Skills 市场面板
 // ═══════════════════════════════════════════════
 
-/** 热门 Skills 推荐（静态数据，后续可从 skills.sh API 动态拉取） */
+/** 热门 Skills 推荐（静态数据，source/skill 已验证） */
 const FEATURED_SKILLS = [
-  { source: 'vercel-labs/agent-skills', skill: 'find-skills', name: 'find-skills', desc: '搜索 skills.sh 上的所有 skill', installs: '599K' },
   { source: 'vercel-labs/agent-skills', skill: 'vercel-react-best-practices', name: 'react-best-practices', desc: 'React + Next.js 性能优化 40+ 规则', installs: '221K' },
-  { source: 'vercel-labs/agent-skills', skill: 'web-design-guidelines', name: 'web-design-guidelines', desc: '可访问性 + 性能 100+ 设计规则', installs: '175K' },
-  { source: 'vercel-labs/agent-skills', skill: 'frontend-design', name: 'frontend-design', desc: '前端界面设计最佳实践', installs: '169K' },
+  { source: 'vercel-labs/agent-skills', skill: 'vercel-composition-patterns', name: 'composition-patterns', desc: 'Vercel 组合模式最佳实践', installs: '95K' },
+  { source: 'vercel-labs/agent-skills', skill: 'deploy-to-vercel', name: 'deploy-to-vercel', desc: '一键部署到 Vercel', installs: '85K' },
+  { source: 'vercel-labs/agent-skills', skill: 'vercel-react-native-skills', name: 'react-native', desc: 'React Native 最佳实践 16 条规则', installs: '60K' },
   { source: 'anthropics/skills', skill: 'claude-api', name: 'claude-api', desc: 'Claude API / Anthropic SDK 使用指南', installs: '87K' },
-  { source: 'vercel-labs/agent-skills', skill: 'ai-sdk-best-practices', name: 'ai-sdk-best-practices', desc: 'Vercel AI SDK 最佳实践', installs: '95K' },
+  { source: 'anthropics/skills', skill: 'claude-code-guide', name: 'claude-code-guide', desc: 'Claude Code CLI 功能指南', installs: '75K' },
 ]
 
 function MarketplacePanel() {
@@ -264,12 +264,12 @@ function MarketplacePanel() {
     setInstallResult(null)
     setError(null)
     try {
-      const res = await apiPost<{ success: boolean; output: string; error?: string }>(
+      const res = await apiPost<{ success: boolean; message?: string; installed?: string[]; error?: string }>(
         '/api/plugins/install-skill',
         { source, skill },
       )
       if (res.success) {
-        setInstallResult({ success: true, message: `安装成功！${skill ? `skill: ${skill}` : `source: ${source}`}` })
+        setInstallResult({ success: true, message: res.message ?? `安装成功！` })
         setCommand('')
       } else {
         setInstallResult({ success: false, message: res.error ?? '安装失败' })
