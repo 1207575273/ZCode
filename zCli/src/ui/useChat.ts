@@ -29,6 +29,7 @@ import type { UserQuestion, UserQuestionResult } from '@core/agent-loop.js'
 import type { ToolEvent, SubAgentEvent } from './ToolStatusLine.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
 import { sessionStore, generateEventId } from '@persistence/index.js'
+import { getTodos } from '@tools/todo-store.js'
 import { PermissionManager } from '@config/permissions.js'
 import { eventBus } from '@core/event-bus.js'
 
@@ -66,6 +67,8 @@ export interface UseChatReturn {
   allowedTools: Set<string>
   currentProvider: string
   currentModel: string
+  /** 当前任务计划列表（todo_write 工具写入，session 级） */
+  todos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }>
   /** 发送用户消息，启动 AgentLoop */
   submit: (text: string) => void
   /** 中止当前流式请求 */
@@ -111,6 +114,8 @@ export function useChat(): UseChatReturn {
   const [allowedTools, setAllowedTools] = useState<Set<string>>(new Set())
   const [currentProvider, setCurrentProvider] = useState<string>(() => configManager.load().defaultProvider ?? '')
   const [currentModel, setCurrentModel] = useState<string>(() => configManager.load().defaultModel ?? '')
+  const [todos, setTodosState] = useState<Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }>>([])
+
 
   // useRef 双轨：xxxRef 供 async 回调读取最新值（避免闭包捕获陈旧 state）；
   // 对应的 state 驱动 UI 重渲染
@@ -295,6 +300,13 @@ export function useChat(): UseChatReturn {
               },
             }
             setMessages(prev => [...prev, toolMsg])
+
+            // todo_write 完成后：同步更新 todos 状态并广播 todo_update 事件
+            if (event.toolName === 'todo_write') {
+              const currentTodos = getTodos()
+              setTodosState(currentTodos)
+              eventBus.emit({ type: 'todo_update', todos: currentTodos })
+            }
           } else if (event.type === 'subagent_progress') {
             // SubAgent 进度：按 agentId 更新或新增
             setSubAgentEvents(prev => {
@@ -574,6 +586,7 @@ export function useChat(): UseChatReturn {
     allowedTools,
     currentProvider,
     currentModel,
+    todos,
     submit,
     abort,
     interruptAndSubmit,

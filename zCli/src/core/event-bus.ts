@@ -10,6 +10,7 @@ export type BridgeEvent =
   | { type: 'config_changed'; provider: string; model: string }
   | { type: 'client_connect'; clientId: string; clientType: 'cli' | 'web' }
   | { type: 'client_disconnect'; clientId: string }
+  | { type: 'todo_update'; todos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }> }
 
 /** EventBus 传输的所有事件类型 */
 export type BusEvent = AgentEvent | BridgeEvent

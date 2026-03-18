@@ -7,6 +7,7 @@ import { InputBar } from '../components/InputBar'
 import { ToolStatus } from '../components/ToolStatus'
 import { PermissionCard } from '../components/PermissionCard'
 import { UserQuestionForm } from '../components/UserQuestionForm'
+import { TodoPanel } from '../components/TodoPanel'
 import type { ChatMessage, ToolEvent, ServerEvent, UserQuestion } from '../types'
 
 interface ChatPageProps {
@@ -21,6 +22,8 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
   const [toolEvents, setToolEvents] = useState<ToolEvent[]>([])
   const [pendingPermission, setPendingPermission] = useState<{ toolName: string; args: Record<string, unknown> } | null>(null)
   const [pendingQuestions, setPendingQuestions] = useState<UserQuestion[] | null>(null)
+  const [todos, setTodos] = useState<Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }>>([])
+
   const bottomRef = useRef<HTMLDivElement>(null)
   const msgIdCounter = useRef(0)
   const turnTextRef = useRef('')
@@ -130,6 +133,9 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         }
         break
       }
+      case 'todo_update':
+        setTodos(event.todos)
+        break
       case 'bridge_stop':
         setMessages(prev => [...prev, { id: nextId(), role: 'system', content: 'Bridge Server 已关闭' }])
         break
@@ -199,6 +205,9 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
 
         {/* 工具执行进度（实时） */}
         <ToolStatus events={toolEvents} />
+
+        {/* 任务计划面板 */}
+        <TodoPanel todos={todos} />
 
         {/* 权限确认 */}
         {pendingPermission && (

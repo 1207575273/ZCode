@@ -79,6 +79,8 @@ export type AgentEvent =
   | { type: 'permission_grant';   toolName: string; always: boolean }
   // 子 Agent 事件 — dispatch_agent 的 stream() 通过 yield* 透传到主 AgentLoop
   | { type: 'subagent_progress';  agentId: string; description: string; turn: number; maxTurns: number; currentTool?: string }
+  // 任务规划事件 — todo_write 工具执行后由 useChat 广播
+  | { type: 'todo_update'; todos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }> }
 
 export interface AgentConfig {
   model: string

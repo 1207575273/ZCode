@@ -37,6 +37,7 @@ import { enterAlternateScreen } from './terminal-screen.js'
 import { useTerminalSize } from './useTerminalSize.js'
 import { AtSuggestion, createSearchItem, createBrowseItem } from './AtSuggestion.js'
 import type { AtSuggestionItem } from './AtSuggestion.js'
+import { TodoPanel } from './TodoPanel.js'
 
 /**
  * App — ZCli 根组件
@@ -84,6 +85,7 @@ export function App({
     resolveQuestion,
     currentProvider,
     currentModel,
+    todos,
     clearMessages,
     appendSystemMessage,
     switchModel,
@@ -740,6 +742,7 @@ export function App({
               <Text dimColor>Esc to interrupt</Text>
             </Box>
           )}
+          {todos.length > 0 && <TodoPanel todos={todos} />}
           {webEnabled && (
             <Box paddingX={1}>
               <Text dimColor>Web UI: </Text>

@@ -18,6 +18,7 @@ import { GlobTool } from '@tools/glob.js'
 import { GrepTool } from '@tools/grep.js'
 import { BashTool } from '@tools/bash.js'
 import { KillShellTool } from '@tools/kill-shell.js'
+import { TodoWriteTool } from '@tools/todo-write.js'
 import { DispatchAgentTool } from '@tools/dispatch-agent.js'
 import { AskUserQuestionTool } from '@tools/ask-user-question.js'
 import { loadMcpConfigWithSources } from '@config/mcp-config.js'
@@ -63,6 +64,7 @@ export function buildRegistry(): ToolRegistry {
   reg.register(new GrepTool())
   reg.register(new BashTool())
   reg.register(new KillShellTool())
+  reg.register(new TodoWriteTool())
   reg.register(new DispatchAgentTool())
   reg.register(new AskUserQuestionTool())
   reg.register(new SkillTool(skillStore))

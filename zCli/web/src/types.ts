@@ -52,6 +52,7 @@ export type ServerEvent =
   | { type: 'llm_start'; provider: string; model: string }
   | { type: 'llm_done'; inputTokens: number; outputTokens: number; stopReason?: string }
   | { type: 'bridge_stop' }
+  | { type: 'todo_update'; todos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }> }
 
 /** 客户端发送的消息 */
 export type ClientMessage =
