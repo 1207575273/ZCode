@@ -39,7 +39,7 @@ export function TodoPanel({ todos }: Props) {
       {/* 任务列表 */}
       <div className="space-y-1">
         {todos.map((t, i) => {
-          const icon = t.status === 'completed' ? '✅' : t.status === 'in_progress' ? '🔄' : '⬜'
+          const icon = t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '▸' : '○'
           const cls =
             t.status === 'completed'
               ? 'text-sm text-gray-500 line-through'

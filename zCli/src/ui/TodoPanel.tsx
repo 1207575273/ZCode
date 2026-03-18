@@ -29,7 +29,7 @@ export function TodoPanel({ todos }: Props) {
     <Box flexDirection="column" paddingX={1} marginBottom={1}>
       <Text dimColor>📋 任务计划 ({completed}/{todos.length} 完成)</Text>
       {todos.map((t, i) => {
-        const icon = t.status === 'completed' ? '✅' : t.status === 'in_progress' ? '🔄' : '⬜'
+        const icon = t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '▸' : '○'
         const color: 'green' | 'yellow' | undefined =
           t.status === 'completed' ? 'green' : t.status === 'in_progress' ? 'yellow' : undefined
         return (

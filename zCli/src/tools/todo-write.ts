@@ -57,7 +57,7 @@ export class TodoWriteTool implements Tool {
       success: true,
       output: `Task plan updated: ${completed}/${total} completed.\n` +
         newTodos.map(t => {
-          const icon = t.status === 'completed' ? '✅' : t.status === 'in_progress' ? '🔄' : '⬜'
+          const icon = t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '▸' : '○'
           return `${icon} ${t.content}`
         }).join('\n'),
     }
