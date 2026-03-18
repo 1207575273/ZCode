@@ -166,6 +166,21 @@ export interface BranchInfo {
   forkPoint: string | null
 }
 
+/** SubAgent JSONL 回放后的快照（Web session_init 用） */
+export interface SubagentSnapshot {
+  agentId: string
+  description: string
+  status: 'running' | 'done' | 'error'
+  events: SubagentSnapshotEvent[]
+}
+
+/** SubAgent 事件详情 */
+export type SubagentSnapshotEvent =
+  | { kind: 'tool_start'; toolName: string; toolCallId: string; args?: Record<string, unknown> }
+  | { kind: 'tool_done'; toolName: string; toolCallId: string; durationMs?: number; success?: boolean; resultSummary?: string }
+  | { kind: 'text'; text: string }
+  | { kind: 'error'; error: string }
+
 export interface SessionSummary {
   sessionId: string
   projectSlug: string

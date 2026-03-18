@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { apiGet } from '../hooks/useApi'
 import { MessageBubble } from '../components/MessageBubble'
-import type { ChatMessage } from '../types'
+import type { ChatMessage, SubagentSnapshot } from '../types'
+import type { SubAgentInfo, SubAgentDetailEvent } from '../components/SubAgentCard'
 
 interface SessionSummary {
   sessionId: string
@@ -43,6 +44,7 @@ interface SessionDetail {
       resultSummary?: string
     }>
   }>
+  subagents?: SubagentSnapshot[]
 }
 
 export function ConversationsPage() {
@@ -170,6 +172,40 @@ function ConversationDetail({ sessionId }: { sessionId: string }) {
     }))
   }, [detail])
 
+  // 从 API 返回的 subagents 构建 SubAgentInfo Map
+  const subAgents: Map<string, SubAgentInfo> = useMemo(() => {
+    const map = new Map<string, SubAgentInfo>()
+    if (!detail?.subagents) return map
+    for (const sa of detail.subagents) {
+      map.set(sa.agentId, {
+        agentId: sa.agentId,
+        description: sa.description,
+        status: sa.status,
+        turn: 0,
+        maxTurns: 25,
+        events: sa.events.map(e => {
+          const evt: SubAgentDetailEvent = { type: e.kind }
+          if (e.kind === 'tool_start' || e.kind === 'tool_done') {
+            evt.toolName = e.toolName
+          }
+          if (e.kind === 'tool_done') {
+            evt.durationMs = e.durationMs
+            evt.success = e.success
+            evt.resultSummary = e.resultSummary
+          }
+          if (e.kind === 'text') {
+            evt.text = e.text
+          }
+          if (e.kind === 'error') {
+            evt.error = e.error
+          }
+          return evt
+        }),
+      })
+    }
+    return map
+  }, [detail])
+
   // 回放定时器
   useEffect(() => {
     if (!isPlaying || visibleCount >= messages.length) {
@@ -256,7 +292,7 @@ function ConversationDetail({ sessionId }: { sessionId: string }) {
       <div className="space-y-1">
         {messages.slice(0, visibleCount).map((msg, i) => (
           <div key={msg.id} className="animate-fade-in" style={{ animationDelay: `${i * 50}ms` }}>
-            <MessageBubble message={msg} />
+            <MessageBubble message={msg} subAgents={subAgents} />
           </div>
         ))}
         {allVisible && messages.length === 0 && (

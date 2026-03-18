@@ -12,6 +12,8 @@
 
 import { useState, useCallback } from 'react'
 import type { ToolEvent } from '../types'
+import { SubAgentCard } from './SubAgentCard'
+import type { SubAgentInfo } from './SubAgentCard'
 
 /** 工具名 → 显示名映射 */
 const DISPLAY_NAMES: Record<string, string> = {
@@ -51,15 +53,33 @@ const MAX_PREVIEW_LINES = 4
 
 interface Props {
   events: ToolEvent[]
+  /** SubAgent 数据，用于在 dispatch_agent 工具条目旁渲染详情卡片 */
+  subAgents?: Map<string, SubAgentInfo>
 }
 
-export function ToolStatus({ events }: Props) {
+/** 从 dispatch_agent 的 resultSummary 中提取 agentId */
+function extractAgentId(resultSummary?: string): string | null {
+  if (!resultSummary) return null
+  const match = resultSummary.match(/agentId:\s*([a-f0-9]+)/)
+  return match?.[1] ?? null
+}
+
+export function ToolStatus({ events, subAgents }: Props) {
   if (events.length === 0) return null
   return (
     <div className="py-1 space-y-1">
-      {events.map(e => (
-        <ToolStatusItem key={e.toolCallId} event={e} />
-      ))}
+      {events.map(e => {
+        // dispatch_agent 工具：尝试匹配关联的 SubAgentCard
+        const agentId = e.toolName === 'dispatch_agent' ? extractAgentId(e.resultSummary) : null
+        const agentInfo = agentId && subAgents ? subAgents.get(agentId) : undefined
+
+        return (
+          <div key={e.toolCallId}>
+            <ToolStatusItem event={e} />
+            {agentInfo && <SubAgentCard agent={agentInfo} />}
+          </div>
+        )
+      })}
     </div>
   )
 }

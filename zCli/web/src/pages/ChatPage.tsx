@@ -8,6 +8,8 @@ import { ToolStatus } from '../components/ToolStatus'
 import { PermissionCard } from '../components/PermissionCard'
 import { UserQuestionForm } from '../components/UserQuestionForm'
 import { TodoPanel } from '../components/TodoPanel'
+import { SubAgentCard } from '../components/SubAgentCard'
+import type { SubAgentInfo, SubAgentDetailEvent } from '../components/SubAgentCard'
 import type { ChatMessage, ToolEvent, ServerEvent, UserQuestion } from '../types'
 
 interface ChatPageProps {
@@ -23,6 +25,11 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
   const [pendingPermission, setPendingPermission] = useState<{ toolName: string; args: Record<string, unknown> } | null>(null)
   const [pendingQuestions, setPendingQuestions] = useState<UserQuestion[] | null>(null)
   const [todos, setTodos] = useState<Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }>>([])
+  const [subAgents, setSubAgents] = useState<Map<string, SubAgentInfo>>(new Map())
+  /** CLI 是否在线（对应当前 session 有活跃的 CLI 连接） */
+  const [cliConnected, setCliConnected] = useState(true)
+  /** 当前活跃的 CLI session（不同于本页 session 时显示切换提示） */
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const msgIdCounter = useRef(0)
@@ -60,6 +67,8 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
     switch (event.type) {
       case 'session_init': {
         setSessionId(event.sessionId)
+        setCliConnected(event.cliConnected !== false)
+        setActiveSessionId(event.activeSessionId ?? null)
         // model 信息现在由每条 assistant 消息携带，不需要 session 级别的
         if (!targetSessionId && event.sessionId) {
           window.history.replaceState(null, '', `/session/${event.sessionId}`)
@@ -77,6 +86,39 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
           ...(m.toolCallCount ? { toolCallCount: m.toolCallCount } : {}),
         })))
         msgIdCounter.current = event.messages.length
+
+        // 恢复 SubAgent 数据（从 JSONL 回放）
+        if (event.subagents && event.subagents.length > 0) {
+          const restored = new Map<string, SubAgentInfo>()
+          for (const sa of event.subagents) {
+            restored.set(sa.agentId, {
+              agentId: sa.agentId,
+              description: sa.description,
+              status: sa.status,
+              turn: 0,
+              maxTurns: 25,
+              events: sa.events.map(e => {
+                const detail: SubAgentDetailEvent = { type: e.kind }
+                if (e.kind === 'tool_start' || e.kind === 'tool_done') {
+                  detail.toolName = e.toolName
+                }
+                if (e.kind === 'tool_done') {
+                  detail.durationMs = e.durationMs
+                  detail.success = e.success
+                  detail.resultSummary = e.resultSummary
+                }
+                if (e.kind === 'text') {
+                  detail.text = e.text
+                }
+                if (e.kind === 'error') {
+                  detail.error = e.error
+                }
+                return detail
+              }),
+            })
+          }
+          setSubAgents(restored)
+        }
         break
       }
       case 'user_input':
@@ -136,6 +178,68 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
       case 'todo_update':
         setTodos(event.todos)
         break
+      case 'subagent_progress':
+        setSubAgents(prev => {
+          const next = new Map(prev)
+          const existing = next.get(event.agentId)
+          next.set(event.agentId, {
+            agentId: event.agentId,
+            description: event.description,
+            status: 'running',
+            turn: event.turn,
+            maxTurns: event.maxTurns,
+            currentTool: event.currentTool,
+            events: existing?.events ?? [],
+          })
+          return next
+        })
+        break
+      case 'subagent_done':
+        setSubAgents(prev => {
+          const next = new Map(prev)
+          const existing = next.get(event.agentId)
+          if (existing) {
+            next.set(event.agentId, {
+              ...existing,
+              status: event.success ? 'done' : 'error',
+              currentTool: undefined,
+            })
+          }
+          return next
+        })
+        break
+      case 'subagent_event':
+        setSubAgents(prev => {
+          const next = new Map(prev)
+          const existing = next.get(event.agentId)
+          if (existing) {
+            const d = event.detail
+            const newEvent: SubAgentDetailEvent = { type: d.kind }
+            if (d.kind === 'tool_start' || d.kind === 'tool_done') {
+              newEvent.toolName = d.toolName
+            }
+            if (d.kind === 'tool_done') {
+              newEvent.durationMs = d.durationMs
+              newEvent.success = d.success
+              newEvent.resultSummary = d.resultSummary
+            }
+            if (d.kind === 'text') {
+              newEvent.text = d.text
+            }
+            if (d.kind === 'error') {
+              newEvent.error = d.error
+            }
+            next.set(event.agentId, {
+              ...existing,
+              events: [...existing.events, newEvent],
+            })
+          }
+          return next
+        })
+        break
+      case 'cli_status':
+        setCliConnected(event.connected)
+        break
       case 'bridge_stop':
         setMessages(prev => [...prev, { id: nextId(), role: 'system', content: 'Bridge Server 已关闭' }])
         break
@@ -172,8 +276,13 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         </div>
         <div className="flex items-center gap-2">
           <span className={`text-xs px-2 py-1 rounded ${connected ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}`}>
-            {connected ? '已连接' : '断开'}
+            {connected ? '已连接' : 'Bridge 断开'}
           </span>
+          {connected && !cliConnected && (
+            <span className="text-xs px-2 py-1 rounded bg-yellow-900 text-yellow-300">
+              CLI 离线
+            </span>
+          )}
           <button
             onClick={() => {
               if (window.confirm('确定关闭 Bridge Server？所有 Web 客户端将断开连接。')) {
@@ -189,9 +298,26 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
       </header>
 
       <div className="flex-1 overflow-y-auto p-4">
+        {/* CLI 离线提示 */}
+        {connected && !cliConnected && (
+          <div className="mb-3 px-3 py-2 rounded-lg bg-yellow-900/30 border border-yellow-700/50 text-sm text-yellow-300 flex items-center justify-between">
+            <span>⚠ 当前会话的 CLI 已离线，发送的消息不会被处理。</span>
+            {activeSessionId && (
+              <button
+                onClick={() => {
+                  window.location.href = `/session/${activeSessionId}`
+                }}
+                className="ml-3 px-2 py-1 rounded bg-yellow-700/50 hover:bg-yellow-600/50 text-yellow-200 text-xs transition-colors"
+              >
+                切换到活跃会话
+              </button>
+            )}
+          </div>
+        )}
+
         {/* 消息历史 */}
         {messages.map(msg => (
-          <MessageBubble key={msg.id} message={msg} />
+          <MessageBubble key={msg.id} message={msg} subAgents={subAgents} />
         ))}
 
         {/* 流式输出：纯文本渲染（不走 ReactMarkdown，避免不完整 Markdown 渲染乱码） */}
@@ -204,7 +330,7 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         )}
 
         {/* 工具执行进度（实时） */}
-        <ToolStatus events={toolEvents} />
+        <ToolStatus events={toolEvents} subAgents={subAgents} />
 
         {/* 任务计划面板 */}
         <TodoPanel todos={todos} />

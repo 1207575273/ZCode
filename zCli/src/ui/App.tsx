@@ -38,6 +38,8 @@ import { useTerminalSize } from './useTerminalSize.js'
 import { AtSuggestion, createSearchItem, createBrowseItem } from './AtSuggestion.js'
 import type { AtSuggestionItem } from './AtSuggestion.js'
 import { TodoPanel } from './TodoPanel.js'
+import { SubAgentPanel } from './SubAgentPanel.js'
+import { listSubAgents } from '@tools/subagent-store.js'
 
 /**
  * App — ZCli 根组件
@@ -115,6 +117,8 @@ export function App({
   const [showResumePanel, setShowResumePanel] = useState(false)
   /** /fork 面板是否显示 */
   const [showForkPanel, setShowForkPanel] = useState(false)
+  /** SubAgent 悬浮面板是否显示 */
+  const [showSubAgentPanel, setShowSubAgentPanel] = useState(false)
 
   // 懒加载 session 列表：仅在 ResumePanel 打开时读取
   const { currentProjectSessions, allSessions } = useMemo(() => {
@@ -608,6 +612,16 @@ export function App({
   }, [])
   useInput(handleModelPickerKey, { isActive: showModelPicker })
 
+  // Ctrl+B 切换 SubAgent 面板（有子 Agent 时才响应）
+  useInput((input, key) => {
+    if (key.ctrl && input === 'b') {
+      const agents = listSubAgents()
+      if (agents.length > 0) {
+        setShowSubAgentPanel(prev => !prev)
+      }
+    }
+  })
+
   // 双击 Ctrl+C 退出计时器（参照 Claude Code：第一次提示，第二次退出）
   const lastCtrlCRef = useRef(0)
   const DOUBLE_CTRLC_MS = 2000
@@ -722,6 +736,8 @@ export function App({
           }}
           onClose={() => setShowForkPanel(false)}
         />
+      ) : showSubAgentPanel ? (
+        <SubAgentPanel onClose={() => setShowSubAgentPanel(false)} />
       ) : (
         <>
           {started && !isStreaming && (() => {
@@ -743,6 +759,13 @@ export function App({
             </Box>
           )}
           {todos.length > 0 && <TodoPanel todos={todos} />}
+          {subAgentEvents.some(e => e.status === 'running') && (
+            <Box paddingX={1}>
+              <Text dimColor>{subAgentEvents.filter(e => e.status === 'running').length} agent(s) running  </Text>
+              <Text color="cyan">Ctrl+B</Text>
+              <Text dimColor> to view</Text>
+            </Box>
+          )}
           {webEnabled && (
             <Box paddingX={1}>
               <Text dimColor>Web UI: </Text>

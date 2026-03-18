@@ -95,7 +95,18 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
       },
 
       onClose() {
+        const disconnected = clients.get(clientId)
         clients.delete(clientId)
+        // CLI 断连时通知同 session 的 Web 客户端
+        if (disconnected?.clientType === 'cli' && disconnected.sessionId) {
+          const sid = disconnected.sessionId
+          const msg = JSON.stringify({ type: 'cli_status', connected: false, sessionId: sid })
+          for (const cl of clients.values()) {
+            if (cl.clientType === 'web' && cl.sessionId === sid) {
+              try { cl.send(msg) } catch { /* ignore */ }
+            }
+          }
+        }
       },
     }
   }))
@@ -207,24 +218,65 @@ function routeMessage(senderId: string, msg: { type: string; [key: string]: unkn
           }
         }
       }
+      const oldSessionId = sender.sessionId
       sender.sessionId = sid
 
-      // Web 客户端注册时推送历史消息
+      // CLI 重新注册（resume 场景）：通知同 session 的 Web 客户端 CLI 回来了
+      if (sender.clientType === 'cli' && sid) {
+        const statusMsg = JSON.stringify({ type: 'cli_status', connected: true, sessionId: sid })
+        for (const cl of clients.values()) {
+          if (cl.clientType === 'web' && cl.sessionId === sid) {
+            try { cl.send(statusMsg) } catch { /* ignore */ }
+          }
+        }
+        // 如果 CLI 从 oldSession 切走，通知那边的 Web 断开
+        if (oldSessionId && oldSessionId !== sid) {
+          const offMsg = JSON.stringify({ type: 'cli_status', connected: false, sessionId: oldSessionId })
+          for (const cl of clients.values()) {
+            if (cl.clientType === 'web' && cl.sessionId === oldSessionId) {
+              try { cl.send(offMsg) } catch { /* ignore */ }
+            }
+          }
+        }
+      }
+
+      // Web 客户端注册时推送历史消息 + SubAgent 数据 + CLI 存活状态
       if (sender.clientType === 'web' && sender.sessionId) {
+        // 检查是否有活跃的 CLI 在这个 session 上
+        let cliConnected = false
+        let activeSessionId: string | undefined
+        for (const cl of clients.values()) {
+          if (cl.clientType === 'cli' && cl.sessionId) {
+            if (cl.sessionId === sender.sessionId) {
+              cliConnected = true
+            }
+            // 记录第一个活跃 CLI 的 sessionId（供切换用）
+            if (!activeSessionId) {
+              activeSessionId = cl.sessionId
+            }
+          }
+        }
+
         try {
           const snapshot = sessionStore.loadMessages(sender.sessionId)
+          const subagents = sessionStore.loadSubagents(sender.sessionId, snapshot.cwd)
           sender.send(JSON.stringify({
             type: 'session_init',
             sessionId: sender.sessionId,
             provider: snapshot.provider,
             model: snapshot.model,
             messages: snapshot.messages,
+            subagents,
+            cliConnected,
+            ...(activeSessionId && activeSessionId !== sender.sessionId ? { activeSessionId } : {}),
           }))
         } catch {
           sender.send(JSON.stringify({
             type: 'session_init',
             sessionId: sender.sessionId,
             messages: [],
+            cliConnected,
+            ...(activeSessionId && activeSessionId !== sender.sessionId ? { activeSessionId } : {}),
           }))
         }
       }

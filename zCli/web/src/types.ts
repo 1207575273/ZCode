@@ -40,7 +40,7 @@ export interface SessionMessage {
 
 /** 服务端推送的事件 */
 export type ServerEvent =
-  | { type: 'session_init'; sessionId: string; provider?: string; model?: string; messages: SessionMessage[] }
+  | { type: 'session_init'; sessionId: string; provider?: string; model?: string; messages: SessionMessage[]; subagents?: SubagentSnapshot[]; cliConnected?: boolean; activeSessionId?: string }
   | { type: 'text'; text: string }
   | { type: 'tool_start'; toolName: string; toolCallId: string; args: Record<string, unknown> }
   | { type: 'tool_done'; toolName: string; toolCallId: string; durationMs: number; success: boolean; resultSummary?: string }
@@ -52,7 +52,11 @@ export type ServerEvent =
   | { type: 'llm_start'; provider: string; model: string }
   | { type: 'llm_done'; inputTokens: number; outputTokens: number; stopReason?: string }
   | { type: 'bridge_stop' }
+  | { type: 'cli_status'; connected: boolean; sessionId: string }
   | { type: 'todo_update'; todos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }> }
+  | { type: 'subagent_progress'; agentId: string; description: string; turn: number; maxTurns: number; currentTool?: string }
+  | { type: 'subagent_done'; agentId: string; description: string; success: boolean; output: string }
+  | { type: 'subagent_event'; agentId: string; detail: { kind: 'tool_start'; toolName: string; toolCallId: string; args?: Record<string, unknown> } | { kind: 'tool_done'; toolName: string; toolCallId: string; durationMs?: number; success?: boolean; resultSummary?: string } | { kind: 'text'; text: string } | { kind: 'error'; error: string } }
 
 /** 客户端发送的消息 */
 export type ClientMessage =
@@ -97,4 +101,17 @@ export interface ToolEvent {
   durationMs?: number
   success?: boolean
   resultSummary?: string
+}
+
+/** SubAgent JSONL 回放快照（session_init 携带） */
+export interface SubagentSnapshot {
+  agentId: string
+  description: string
+  status: 'running' | 'done' | 'error'
+  events: Array<
+    | { kind: 'tool_start'; toolName: string; toolCallId: string; args?: Record<string, unknown> }
+    | { kind: 'tool_done'; toolName: string; toolCallId: string; durationMs?: number; success?: boolean; resultSummary?: string }
+    | { kind: 'text'; text: string }
+    | { kind: 'error'; error: string }
+  >
 }

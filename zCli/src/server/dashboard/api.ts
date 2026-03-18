@@ -163,7 +163,8 @@ export function createApiRoutes(): Hono {
     try {
       const sessionId = c.req.param('id')
       const snapshot = sessionStore.loadMessages(sessionId)
-      return c.json(snapshot)
+      const subagents = sessionStore.loadSubagents(sessionId, snapshot.cwd)
+      return c.json({ ...snapshot, subagents })
     } catch (err) {
       return c.json({ error: String(err) }, 500)
     }

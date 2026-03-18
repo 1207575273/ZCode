@@ -32,6 +32,7 @@ import { sessionStore, generateEventId } from '@persistence/index.js'
 import { getTodos } from '@tools/todo-store.js'
 import { PermissionManager } from '@config/permissions.js'
 import { eventBus } from '@core/event-bus.js'
+import { updateBridgeSession, isBridgeConnected } from '@server/bridge/client.js'
 
 // 从 bootstrap 重导出，供 bin/zcli.ts 和 App.tsx 使用
 export { sessionLogger, tokenMeter, getCurrentSessionId }
@@ -138,6 +139,40 @@ export function useChat(): UseChatReturn {
       sessionLogger.ensureSession(currentProvider, currentModel)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 订阅 eventBus 上的后台 subagent 事件（run_in_background 模式不经过 AgentLoop yield）
+  useEffect(() => {
+    const unsub = eventBus.on((event) => {
+      if (event.type === 'subagent_progress') {
+        setSubAgentEvents(prev => {
+          const idx = prev.findIndex(e => e.agentId === event.agentId)
+          const updated: SubAgentEvent = {
+            id: event.agentId,
+            agentId: event.agentId,
+            description: event.description,
+            status: 'running',
+            turn: event.turn,
+            maxTurns: event.maxTurns,
+            ...(event.currentTool !== undefined ? { currentTool: event.currentTool } : {}),
+          }
+          if (idx >= 0) {
+            const next = [...prev]
+            next[idx] = updated
+            return next
+          }
+          return [...prev, updated]
+        })
+      } else if (event.type === 'subagent_done') {
+        setSubAgentEvents(prev =>
+          prev.map(e => e.agentId === event.agentId
+            ? { ...e, status: 'done' as const, durationMs: Date.now() - (e.durationMs ?? 0) }
+            : e
+          )
+        )
+      }
+    })
+    return unsub
+  }, [])
 
 
   /**
@@ -469,6 +504,11 @@ export function useChat(): UseChatReturn {
       })
       // 更新 logger 的 lastEventUuid
       sessionLogger.bind(sessionId, resumeEventId)
+
+      // 通知 Bridge 客户端切换到新 sessionId（Web 端感知 CLI 回来了）
+      if (isBridgeConnected()) {
+        updateBridgeSession(sessionId)
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       appendSystemMessage(`Failed to load session: ${msg}`)

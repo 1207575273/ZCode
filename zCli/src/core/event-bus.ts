@@ -11,6 +11,16 @@ export type BridgeEvent =
   | { type: 'client_connect'; clientId: string; clientType: 'cli' | 'web' }
   | { type: 'client_disconnect'; clientId: string }
   | { type: 'todo_update'; todos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }> }
+  | { type: 'subagent_progress'; agentId: string; description: string; turn: number; maxTurns: number; currentTool?: string }
+  | { type: 'subagent_done'; agentId: string; description: string; success: boolean; output: string }
+  | { type: 'subagent_event'; agentId: string; detail: SubAgentDetail }
+
+/** SubAgent 详细事件（透传到 Web 端展示） */
+export type SubAgentDetail =
+  | { kind: 'tool_start'; toolName: string; toolCallId: string; args?: Record<string, unknown> }
+  | { kind: 'tool_done'; toolName: string; toolCallId: string; durationMs?: number; success?: boolean; resultSummary?: string }
+  | { kind: 'text'; text: string }
+  | { kind: 'error'; error: string }
 
 /** EventBus 传输的所有事件类型 */
 export type BusEvent = AgentEvent | BridgeEvent

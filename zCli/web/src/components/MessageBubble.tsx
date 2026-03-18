@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import { ToolStatus } from './ToolStatus'
 import type { ChatMessage } from '../types'
+import type { SubAgentInfo } from './SubAgentCard'
 
 /** 格式化 token 数量：>1M 显示 M，>1K 显示 K，否则原始数字 */
 const fmtTokens = (n: number) =>
@@ -12,9 +13,10 @@ const fmtTokens = (n: number) =>
 
 interface Props {
   message: ChatMessage
+  subAgents?: Map<string, SubAgentInfo>
 }
 
-export function MessageBubble({ message }: Props) {
+export function MessageBubble({ message, subAgents }: Props) {
   const isUser = message.role === 'user'
   const isSystem = message.role === 'system'
   const sourceTag = message.source === 'web' ? ' (web)' : message.source === 'cli' ? ' (cli)' : ''
@@ -26,7 +28,7 @@ export function MessageBubble({ message }: Props) {
   if (isSystem && message.toolEvents && message.toolEvents.length > 0) {
     return (
       <div className="mb-2 px-2">
-        <ToolStatus events={message.toolEvents} />
+        <ToolStatus events={message.toolEvents} subAgents={subAgents} />
       </div>
     )
   }

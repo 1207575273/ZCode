@@ -375,6 +375,91 @@ export class SessionStore {
     return virtualSessionId
   }
 
+  /**
+   * 加载指定会话的所有 SubAgent 数据（从 JSONL 回放）。
+   *
+   * 扫描 `<baseDir>/<projectSlug>/<sessionId>/subagents/` 目录，
+   * 解析每个 agent-<agentId>.jsonl，提取描述、状态和详细事件。
+   */
+  loadSubagents(sessionId: string, cwd: string): SubagentSnapshot[] {
+    const projectSlug = toProjectSlug(cwd)
+    const subagentDir = join(this.baseDir, projectSlug, sessionId, 'subagents')
+    if (!existsSync(subagentDir)) return []
+
+    const results: SubagentSnapshot[] = []
+    const files = readdirSync(subagentDir).filter(f => f.startsWith('agent-') && f.endsWith('.jsonl'))
+
+    for (const file of files) {
+      try {
+        const filePath = join(subagentDir, file)
+        const lines = readFileSync(filePath, 'utf-8').split('\n').filter(Boolean)
+        const events: SessionEvent[] = lines.map(l => JSON.parse(l) as SessionEvent)
+
+        // 从 session_start 提取 agentId
+        const startEvent = events.find(e => e.type === 'session_start')
+        if (!startEvent?.agentId) continue
+
+        const agentId = startEvent.agentId
+        const endEvent = events.find(e => e.type === 'session_end')
+        const userEvent = events.find(e => e.type === 'user')
+        const assistantEvent = events.find(e => e.type === 'assistant')
+
+        // 提取描述：从父会话 dispatch_agent 的 description 参数获取不到，
+        // 用 user message 的前 50 字符作为 fallback
+        const description = typeof userEvent?.message?.content === 'string'
+          ? userEvent.message.content.slice(0, 50)
+          : agentId
+
+        // 提取详细事件
+        const detailEvents: SubagentSnapshotEvent[] = []
+        for (const ev of events) {
+          if (ev.type === 'tool_call_start' && ev.toolName) {
+            detailEvents.push({
+              kind: 'tool_start',
+              toolName: ev.toolName,
+              toolCallId: ev.toolCallId ?? '',
+              args: ev.args,
+            })
+          } else if (ev.type === 'tool_call_end' && ev.toolName) {
+            detailEvents.push({
+              kind: 'tool_done',
+              toolName: ev.toolName,
+              toolCallId: ev.toolCallId ?? '',
+              durationMs: ev.durationMs,
+              success: ev.success,
+              resultSummary: ev.resultSummary,
+            })
+          } else if (ev.type === 'assistant' && typeof ev.message?.content === 'string') {
+            detailEvents.push({
+              kind: 'text',
+              text: ev.message.content,
+            })
+          } else if (ev.type === 'error') {
+            detailEvents.push({
+              kind: 'error',
+              error: ev.error ?? 'unknown error',
+            })
+          }
+        }
+
+        const status: 'done' | 'error' | 'running' = endEvent
+          ? (endEvent.totalErrors && endEvent.totalErrors > 0 ? 'error' : 'done')
+          : 'running' // 没有 session_end 说明还在运行或异常退出
+
+        results.push({
+          agentId,
+          description,
+          status,
+          events: detailEvents,
+        })
+      } catch {
+        // 单个 JSONL 解析失败不影响其他
+      }
+    }
+
+    return results
+  }
+
   /** Walk from leafUuid up to root via parentUuid, return chronological path */
   #buildEventPath(events: SessionEvent[], leafUuid: string): SessionEvent[] {
     const eventMap = new Map<string, SessionEvent>()

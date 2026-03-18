@@ -38,6 +38,21 @@ export function connectBridge(port: number, sid: string): void {
   doConnect(port)
 }
 
+/**
+ * 更新 Bridge 注册的 sessionId（resume 场景）。
+ * 发送新的 register 消息让 Bridge 更新客户端关联的 session。
+ */
+export function updateBridgeSession(newSid: string): void {
+  sessionId = newSid
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'register',
+      clientType: 'cli',
+      sessionId: newSid,
+    }))
+  }
+}
+
 /** 断开连接（CLI 退出时调用） */
 export function disconnectBridge(): void {
   clearTimeout(reconnectTimer)

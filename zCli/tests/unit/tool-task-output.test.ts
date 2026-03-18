@@ -9,6 +9,12 @@ import {
   markDone,
   getProcess,
 } from '../../src/tools/process-tracker.js'
+import {
+  registerSubAgent,
+  appendSubAgentEvent,
+  markSubAgentDone,
+  clearSubAgents,
+} from '../../src/tools/subagent-store.js'
 import type { ToolContext } from '../../src/tools/types.js'
 
 const ctx: ToolContext = { cwd: '/tmp' }
@@ -119,6 +125,39 @@ describe('TaskOutputTool', () => {
 
     // 清理
     unregisterProcess(TEST_PID)
+  })
+})
+
+describe('TaskOutputTool — SubAgent 模式', () => {
+  beforeEach(() => {
+    clearSubAgents()
+  })
+
+  it('应通过 agent_id 读取子 Agent 状态', async () => {
+    registerSubAgent('test-agent', '测试任务', 10)
+    appendSubAgentEvent('test-agent', { type: 'tool_done', timestamp: 1, toolName: 'bash', success: true, durationMs: 50 })
+    markSubAgentDone('test-agent', '完成了', 'done')
+
+    const tool = new TaskOutputTool()
+    const result = await tool.execute({ agent_id: 'test-agent' }, ctx)
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('子 Agent 已完成')
+    expect(result.output).toContain('测试任务')
+    expect(result.output).toContain('完成了')
+  })
+
+  it('应拒绝不存在的 agent_id', async () => {
+    const tool = new TaskOutputTool()
+    const result = await tool.execute({ agent_id: 'nonexistent' }, ctx)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('不在追踪列表中')
+  })
+
+  it('无 pid 无 agent_id 应报错', async () => {
+    const tool = new TaskOutputTool()
+    const result = await tool.execute({}, ctx)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('需要提供')
   })
 })
 
