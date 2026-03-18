@@ -2,7 +2,7 @@
 import { execa, ExecaError } from 'execa'
 import { resolveShell } from '@platform/shell-resolver.js'
 import { detectPlatform } from '@platform/detector.js'
-import { registerProcess, unregisterProcess } from './process-tracker.js'
+import { registerProcess, unregisterProcess, appendOutput, markDone } from './process-tracker.js'
 import type { Tool, ToolContext, ToolResult } from './types.js'
 
 /** 默认超时 120 秒 */
@@ -91,7 +91,7 @@ export class BashTool implements Tool {
       const child = execa(shell.path, [...shell.args, command], {
         cwd,
         detached: true,
-        stdio: 'ignore',
+        stdio: 'pipe',  // 管道模式，捕获输出供 task_output 读取
       })
       // 分离子进程，不阻塞父进程退出
       child.unref()
@@ -101,16 +101,29 @@ export class BashTool implements Tool {
       child.catch(() => { /* 后台进程退出错误静默忽略 */ })
 
       const pid = child.pid
-      // 注册到进程追踪器，供 kill_shell 工具查询和终止
       if (pid != null) {
+        // 注册到进程追踪器，供 kill_shell / task_output 工具使用
         registerProcess(pid, command, cwd)
-        // 进程退出时自动取消注册
-        child.on('exit', () => unregisterProcess(pid))
+
+        // 捕获 stdout / stderr 输出到 tracker 缓冲区
+        child.stdout?.on('data', (data: Buffer) => appendOutput(pid, data.toString()))
+        child.stderr?.on('data', (data: Buffer) => appendOutput(pid, data.toString()))
+
+        // unref stdio 流，不阻塞父进程退出
+        child.stdout?.unref()
+        child.stderr?.unref()
+
+        // 进程退出时记录退出码，延迟清理（给 task_output 留读取窗口）
+        child.on('exit', (code) => {
+          markDone(pid, code)
+          // 30 秒后自动清理，避免内存泄漏
+          setTimeout(() => unregisterProcess(pid), 30_000).unref()
+        })
       }
       const killHint = buildKillHint(pid)
       return {
         success: true,
-        output: `Background process started (pid: ${pid}). Use kill_shell tool or "${killHint}" to stop it.`,
+        output: `Background process started (pid: ${pid}). Use task_output tool to read output, or kill_shell to stop it.\n${killHint}`,
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err)
