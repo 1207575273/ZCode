@@ -62,7 +62,7 @@ function truncate(str: string, maxLen: number): string {
 /** user/assistant 角色的颜色和标签配置，system 走独立渲染分支。 */
 const ROLE_CONFIG = {
   user: { color: 'green' as const, label: '> 你' },
-  assistant: { color: 'cyan' as const, label: '◆ ZCli' },
+  assistant: { color: 'cyan' as const, label: '◆ CCode' },
 } as const
 
 interface ChatViewProps {
@@ -138,7 +138,7 @@ export function ChatView({ messages, streamingMessage, toolEvents, subAgentEvent
       {/* 流式气泡：streamingMessage 不为 null/undefined 时显示 */}
       {streamingMessage != null && (
         <Box marginBottom={1} flexDirection="column">
-          <Text color="cyan" bold>◆ ZCli</Text>
+          <Text color="cyan" bold>◆ CCode</Text>
           {streamingMessage === '' ? (
             <Box>
               <Spinner type="dots" />

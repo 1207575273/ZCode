@@ -133,7 +133,7 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
   const isDev = options.dev ?? false
   // distDir 路径解析：
   //   dev 模式：从源码目录回溯到 web/dist（兼容旧路径）
-  //   生产模式：从 ccode.js 位置（dist/bin/）相对定位到 dist/web/
+  //   生产模式：从 ccli.js 位置（dist/bin/）相对定位到 dist/web/
   //            即 import.meta.dirname/../web（打包后 dist/bin/ → dist/web/）
   //            回退到 cwd/web/dist（兼容未打包场景）
   const scriptDir = import.meta.dirname ?? '.'

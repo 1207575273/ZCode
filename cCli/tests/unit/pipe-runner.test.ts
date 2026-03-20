@@ -8,8 +8,8 @@ import { describe, it, expect } from 'vitest'
  * 端到端的 Pipe Mode 测试通过手动 CLI 调用验证。
  */
 
-describe('parseArgs (zcli.ts arg parsing)', () => {
-  // 直接测试 parseArgs 逻辑（内联实现，避免导入 bin/zcli.ts 触发副作用）
+describe('parseArgs (ccli.ts arg parsing)', () => {
+  // 直接测试 parseArgs 逻辑（内联实现，避免导入 bin/ccli.ts 触发副作用）
   function parseArgs(argv: string[]) {
     const result = {
       prompt: null as string | null,

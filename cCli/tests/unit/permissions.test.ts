@@ -95,8 +95,8 @@ describe('PermissionManager', () => {
 
   describe('fromProjectDir', () => {
     const testDir = join(tmpdir(), `ccode-perm-test-${Date.now()}`)
-    const zcliDir = join(testDir, '.ccode')
-    const settingsPath = join(zcliDir, 'settings.local.json')
+    const ccodeDir = join(testDir, '.ccode')
+    const settingsPath = join(ccodeDir, 'settings.local.json')
 
     beforeEach(() => {
       if (existsSync(testDir)) rmSync(testDir, { recursive: true })
@@ -113,7 +113,7 @@ describe('PermissionManager', () => {
     })
 
     it('settings.local.json 存在时加载规则', () => {
-      mkdirSync(zcliDir, { recursive: true })
+      mkdirSync(ccodeDir, { recursive: true })
       writeFileSync(settingsPath, JSON.stringify({
         permissions: { allow: ['Bash(*)', 'Read(*)'] },
       }), 'utf-8')
@@ -125,7 +125,7 @@ describe('PermissionManager', () => {
     })
 
     it('settings.local.json JSON 损坏时返回空白名单', () => {
-      mkdirSync(zcliDir, { recursive: true })
+      mkdirSync(ccodeDir, { recursive: true })
       writeFileSync(settingsPath, '{ broken', 'utf-8')
 
       const pm = PermissionManager.fromProjectDir(testDir, REGISTERED_TOOLS)

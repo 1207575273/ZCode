@@ -69,7 +69,7 @@ export function WelcomeScreen({ model, provider, cwd, recentSessions }: WelcomeS
     >
       {/* 标题行 */}
       <Box paddingX={1} marginBottom={1}>
-        <Text color="red" bold>── ZCli {APP_VERSION} ──</Text>
+        <Text color="red" bold>── CCode {APP_VERSION} ──</Text>
       </Box>
 
       {/* 双栏主体 */}

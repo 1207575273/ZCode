@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 let testDir: string
 
 beforeEach(() => {
-  testDir = join(tmpdir(), `zcli-tools-${Date.now()}`)
+  testDir = join(tmpdir(), `ccode-tools-${Date.now()}`)
   mkdirSync(testDir, { recursive: true })
   writeFileSync(join(testDir, 'hello.ts'), 'export const hello = "world"\n// greeting function\n')
   writeFileSync(join(testDir, 'other.ts'), 'export const other = 42\n')

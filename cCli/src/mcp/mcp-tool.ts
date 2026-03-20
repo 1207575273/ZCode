@@ -10,7 +10,7 @@ export interface McpToolDefinition {
 }
 
 /**
- * 将 MCP Server 暴露的工具适配为 ZCli 内部 Tool 接口。
+ * 将 MCP Server 暴露的工具适配为 cCli 内部 Tool 接口。
  * 命名格式: mcp__<serverName>__<toolName>
  */
 export class McpTool implements Tool {

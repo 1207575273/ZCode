@@ -4,7 +4,7 @@
   "description": "开源多模型 AI 编程 CLI 助手 — 支持 Claude/OpenAI/GLM/DeepSeek/Ollama",
   "type": "module",
   "bin": {
-    "ccode": "./dist/bin/ccode.js"
+    "ccode": "./dist/bin/ccli.js"
   },
   "repository": {
     "type": "git",
@@ -13,9 +13,9 @@
   "homepage": "https://github.com/1207575273/CCode#readme",
   "author": "codeYang",
   "scripts": {
-    "dev": "tsx bin/ccode.ts",
-    "dev:pipe": "tsx bin/ccode.ts",
-    "dev:web": "node scripts/ensure-web.cjs && tsx bin/ccode.ts --web",
+    "dev": "tsx bin/ccli.ts",
+    "dev:pipe": "tsx bin/ccli.ts",
+    "dev:web": "node scripts/ensure-web.cjs && tsx bin/ccli.ts --web",
     "build": "tsup",
     "build:web": "node scripts/ensure-web.cjs && cd web && pnpm build",
     "build:all": "tsup && node scripts/ensure-web.cjs && cd web && pnpm build",

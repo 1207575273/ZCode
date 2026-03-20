@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { createProvider } from '@providers/registry.js'
-import type { ZCliConfig } from '@config/config-manager.js'
+import type { CCodeConfig } from '@config/config-manager.js'
 
-const baseConfig: ZCliConfig = {
+const baseConfig: CCodeConfig = {
   defaultProvider: 'anthropic',
   defaultModel: 'claude-sonnet-4-6',
   providers: {

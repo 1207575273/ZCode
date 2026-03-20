@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 describe('SkillStore', () => {
-  const testDir = join(tmpdir(), `zcli-skills-test-${Date.now()}`)
+  const testDir = join(tmpdir(), `ccode-skills-test-${Date.now()}`)
   const skillDir = join(testDir, 'test-skill')
   const skillFile = join(skillDir, 'SKILL.md')
 

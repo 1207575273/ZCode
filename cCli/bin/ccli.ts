@@ -1,17 +1,17 @@
-// bin/zcli.ts
+// bin/ccli.ts
 
 /**
- * ZCli 入口 — 根据参数判断运行模式：
+ * cCli 入口 — 根据参数判断运行模式：
  *
  * 1. 非交互模式（Pipe Mode）：有 prompt 时直接执行，纯文本输出，执行完退出
- *    - zcli "问题"
- *    - zcli -p "问题"
- *    - cat file | zcli "分析一下"
+ *    - ccode "问题"
+ *    - ccode -p "问题"
+ *    - cat file | ccode "分析一下"
  *
  * 2. 交互模式（REPL）：无 prompt 时启动 Ink 界面
- *    - zcli
- *    - zcli --resume
- *    - zcli --resume <sessionId>
+ *    - ccode
+ *    - ccode --resume
+ *    - ccode --resume <sessionId>
  */
 
 import { runPipe, readStdin } from '../src/core/pipe-runner.js'
@@ -194,8 +194,8 @@ if (args.prompt != null) {
   /** 检测启动方式，生成对应的 resume 命令 */
   function getResumeCommand(sessionId: string): string {
     const entry = process.argv[1] ?? ''
-    if (entry.endsWith('zcli.js') || entry.endsWith('zcli')) {
-      return `zcli --resume ${sessionId}`
+    if (entry.endsWith('ccli.js') || entry.endsWith('ccode') || entry.endsWith('ccli')) {
+      return `ccode --resume ${sessionId}`
     }
     return `pnpm dev -- --resume ${sessionId}`
   }

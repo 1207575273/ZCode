@@ -120,11 +120,11 @@ export function initialize(): InitDiagnostic {
   }
 
   // 4. 确保项目级 .ccode/settings.local.json 存在
-  const projectZcliDir = join(process.cwd(), '.ccode')
-  const localSettingsPath = join(projectZcliDir, 'settings.local.json')
+  const projectCcodeDir = join(process.cwd(), '.ccode')
+  const localSettingsPath = join(projectCcodeDir, 'settings.local.json')
   if (!existsSync(localSettingsPath)) {
-    if (!existsSync(projectZcliDir)) {
-      mkdirSync(projectZcliDir, { recursive: true })
+    if (!existsSync(projectCcodeDir)) {
+      mkdirSync(projectCcodeDir, { recursive: true })
     }
     writeFileSync(localSettingsPath, JSON.stringify(DEFAULT_LOCAL_SETTINGS, null, 2), 'utf-8')
     created.push(localSettingsPath)

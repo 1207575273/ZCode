@@ -16,7 +16,7 @@ import { join, basename } from 'node:path'
 import { homedir } from 'node:os'
 import fg from 'fast-glob'
 
-/** ZCli 插件根目录 */
+/** cCli 插件根目录 */
 const ccodePluginsDir = () => join(homedir(), '.ccode', 'plugins')
 /** Claude Code 插件注册表 */
 const claudeInstalledPath = () => join(homedir(), '.claude', 'plugins', 'installed_plugins.json')
@@ -202,7 +202,7 @@ export function createPluginsRoutes(): Hono {
   return api
 }
 
-/** 扫描已安装的 ZCli 插件 */
+/** 扫描已安装的 cCli 插件 */
 function scanInstalledPlugins(): PluginInfo[] {
   const dir = ccodePluginsDir()
   if (!existsSync(dir)) return []
@@ -244,7 +244,7 @@ function analyzePlugin(name: string, pluginDir: string): PluginInfo | null {
   try {
     // Claude Code 格式
     const claudePlugin = join(pluginDir, '.claude-plugin', 'plugin.json')
-    // ZCli 格式
+    // cCli 格式
     const ccodePlugin = join(pluginDir, 'plugin.json')
     const metaPath = existsSync(claudePlugin) ? claudePlugin : existsSync(ccodePlugin) ? ccodePlugin : null
     if (metaPath) {
@@ -265,7 +265,7 @@ function analyzePlugin(name: string, pluginDir: string): PluginInfo | null {
   }
 }
 
-/** 扫描 Claude Code 已安装的插件，标记哪些已导入到 ZCli */
+/** 扫描 Claude Code 已安装的插件，标记哪些已导入到 cCli */
 function scanClaudePlugins(): ClaudeAvailablePlugin[] {
   const installedPath = claudeInstalledPath()
   if (!existsSync(installedPath)) return []

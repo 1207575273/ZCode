@@ -3,7 +3,7 @@ import { AnthropicProvider } from './anthropic.js'
 import { OpenAICompatProvider } from './openai-compat.js'
 import { ProviderWrapper } from './wrapper.js'
 import type { LLMProvider } from './provider.js'
-import type { ZCliConfig } from '@config/config-manager.js'
+import type { CCodeConfig } from '@config/config-manager.js'
 
 /**
  * 判断协议类型：
@@ -15,7 +15,7 @@ function resolveProtocol(providerName: string, protocol?: 'anthropic' | 'openai'
   return providerName === 'anthropic' ? 'anthropic' : 'openai'
 }
 
-export function createProvider(providerName: string, config: ZCliConfig): LLMProvider {
+export function createProvider(providerName: string, config: CCodeConfig): LLMProvider {
   const providerCfg = config.providers[providerName]
   if (!providerCfg) {
     throw new Error(`Provider "${providerName}" 未在 ~/.ccode/config.json 中配置`)

@@ -46,7 +46,7 @@ import { SubAgentPanel } from './SubAgentPanel.js'
 import { listSubAgents } from '@tools/ext/subagent-store.js'
 
 /**
- * App — ZCli 根组件
+ * App — cCli 根组件
  *
  * 职责：
  * - 组合所有 UI 模块（WelcomeScreen / ChatView / InputBar / CommandSuggestion / PermissionDialog / ModelPicker）

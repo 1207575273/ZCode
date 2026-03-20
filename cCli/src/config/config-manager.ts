@@ -11,13 +11,13 @@ export interface ProviderConfig {
   models: string[]
 }
 
-export interface ZCliConfig {
+export interface CCodeConfig {
   defaultProvider: string
   defaultModel: string
   providers: Record<string, ProviderConfig | undefined>
 }
 
-const DEFAULT_CONFIG: ZCliConfig = {
+const DEFAULT_CONFIG: CCodeConfig = {
   defaultProvider: 'anthropic',
   defaultModel: 'claude-sonnet-4-6',
   providers: {
@@ -44,7 +44,7 @@ export class ConfigManager {
     this.#configPath = join(baseDir, 'config.json')
   }
 
-  load(): ZCliConfig {
+  load(): CCodeConfig {
     if (!existsSync(this.#configPath)) {
       this.#ensureDir()
       this.#write(DEFAULT_CONFIG)
@@ -52,13 +52,13 @@ export class ConfigManager {
     }
     try {
       const raw = readFileSync(this.#configPath, 'utf-8')
-      return JSON.parse(raw) as ZCliConfig
+      return JSON.parse(raw) as CCodeConfig
     } catch {
       return { ...DEFAULT_CONFIG }
     }
   }
 
-  save(config: ZCliConfig): void {
+  save(config: CCodeConfig): void {
     this.#ensureDir()
     this.#write(config)
   }
@@ -68,7 +68,7 @@ export class ConfigManager {
     mkdirSync(dir, { recursive: true })
   }
 
-  #write(config: ZCliConfig): void {
+  #write(config: CCodeConfig): void {
     writeFileSync(this.#configPath, JSON.stringify(config, null, 2), 'utf-8')
   }
 }
