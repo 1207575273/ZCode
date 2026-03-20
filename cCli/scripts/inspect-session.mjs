@@ -13,7 +13,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, basename } from 'node:path'
 import { homedir } from 'node:os'
 
-const SESSIONS_DIR = join(homedir(), '.zcli', 'sessions')
+const SESSIONS_DIR = join(homedir(), '.ccode', 'sessions')
 
 // ── 颜色工具 ──
 const c = {
@@ -273,7 +273,7 @@ if (arg === '--all') {
 } else {
   const latest = findLatestSession()
   if (!latest) {
-    console.log('No session files found in ~/.zcli/sessions/')
+    console.log('No session files found in ~/.ccode/sessions/')
     process.exit(1)
   }
   inspectSession(latest)

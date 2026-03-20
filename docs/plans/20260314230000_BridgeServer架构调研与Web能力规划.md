@@ -1,4 +1,4 @@
-> 备注：项目原名 ZCli，2026-03-20 更名为 cCli（品牌名 CCode），详见 01_需求与项目管理核心文档/20260320030000_项目改名_ZCli到CCode.md
+> 备注：项目原名 cCli，2026-03-20 更名为 cCli（品牌名 CCode），详见 01_需求与项目管理核心文档/20260320030000_项目改名_ZCli到CCode.md
 
 # Bridge Server 架构调研与 Web 能力规划
 
@@ -48,7 +48,7 @@ Browser (xterm.js) ←──WebSocket──→ Express Server (claude-bridge.js)
 
 业界方案都是"终端镜像"模式，无法满足双向融合 + 多 session 隔离需求。需要自研。
 
-## 三、ZCli Bridge Server 最终架构
+## 三、cCli Bridge Server 最终架构
 
 ### 3.1 核心理念
 

@@ -1,4 +1,4 @@
-> 备注：项目原名 ZCli，2026-03-20 更名为 cCli（品牌名 CCode），详见 01_需求与项目管理核心文档/20260320030000_项目改名_ZCli到CCode.md
+> 备注：项目原名 cCli，2026-03-20 更名为 cCli（品牌名 CCode），详见 01_需求与项目管理核心文档/20260320030000_项目改名_ZCli到CCode.md
 
 # Bridge Server 与 Web UI 实施总结
 
@@ -12,7 +12,7 @@
 
 ### 1.1 为什么要做 Web UI
 
-ZCli 是一个终端 AI 编程助手（类 Claude Code），核心交互全在终端内完成。但终端有天然局限：
+cCli 是一个终端 AI 编程助手（类 Claude Code），核心交互全在终端内完成。但终端有天然局限：
 
 - **Markdown/代码渲染受限** — 终端无法渲染富文本、代码高亮、Diff 视图
 - **不方便分享和回顾** — 终端输出滚走就没了，翻历史不方便
@@ -261,7 +261,7 @@ useEffect(() => {
 |------|------|
 | `useChat.ts` | 新增 mount useEffect，调 ensureSession |
 | `sessionLogger` | 零改动（ensureSession 本身就是幂等的） |
-| `bin/zcli.ts` | Bridge 连接时机从"启动时"改为"render 后 100ms"（等 session 创建） |
+| `bin/ccli.ts` | Bridge 连接时机从"启动时"改为"render 后 100ms"（等 session 创建） |
 | Bridge Server | 连接时能拿到 sessionId，推送 session_init 正常工作 |
 | Web 前端 | 连接后立即收到历史消息，URL 包含完整 sessionId |
 | `/resume` 恢复 | 不受影响 — resume 走 `sessionLogger.bind()`，不走 ensureSession |
@@ -337,7 +337,7 @@ useEffect(() => {
 |------|------|-------------|---------|
 | 纯 CLI | `pnpm dev` | 无 | 日常对话，不需要 Web |
 | Dev + Web | `pnpm dev:web` | Vite dev server (HMR 热更新) | 开发 Web 前端，改代码即时刷新 |
-| 生产 + Web | `node dist/bin/zcli.js --web` | Bridge 托管 `web/dist/` 静态文件 | 正式使用，单端口，无需 Vite |
+| 生产 + Web | `node dist/bin/ccli.js --web` | Bridge 托管 `web/dist/` 静态文件 | 正式使用，单端口，无需 Vite |
 
 ### 6.2 开发模式（pnpm dev:web）
 
@@ -403,7 +403,7 @@ pnpm build:all         # → dist/ + web/dist/
 cCli/
 ├── dist/                      ← CLI 构建产物 (tsup)
 │   └── bin/
-│       └── zcli.js                入口文件
+│       └── ccli.js                入口文件
 ├── web/
 │   └── dist/                  ← Web 前端构建产物 (Vite)
 │       ├── index.html             SPA 入口
@@ -420,16 +420,16 @@ cCli/
 cd cCli && pnpm build:all
 
 # 启动（纯 CLI）
-node dist/bin/zcli.js
+node dist/bin/ccli.js
 
 # 启动（带 Web UI）
-node dist/bin/zcli.js --web
+node dist/bin/ccli.js --web
 ```
 
 生产模式下 Bridge Server 直接托管 `web/dist/` 静态文件，**不需要 Vite**，单端口 9800 搞定一切。
 
 ```
-node dist/bin/zcli.js --web
+node dist/bin/ccli.js --web
   │
   ├─ Bridge Server (port 9800)
   │   ├─ /ws           → WebSocket 消息路由
@@ -488,7 +488,7 @@ pnpm dev:web
 }
 ```
 
-用户安装后 `npx zcli --web` 直接可用，无需自己构建前端。
+用户安装后 `npx ccode --web` 直接可用，无需自己构建前端。
 
 ---
 
@@ -518,7 +518,7 @@ pnpm dev:web
 
 | 文件 | 改动 |
 |------|------|
-| `bin/zcli.ts` | --web 参数、Bridge 启动/连接逻辑、webEnabled prop |
+| `bin/ccli.ts` | --web 参数、Bridge 启动/连接逻辑、webEnabled prop |
 | `src/ui/useChat.ts` | EventBus 广播 + Web 输入回流监听 + session 预创建 |
 | `src/ui/App.tsx` | webEnabled 渲染 + /bridge 指令处理 + bootstrap 始终显示 |
 | `src/commands/types.ts` | 新增 bridge_status/bridge_stop action |

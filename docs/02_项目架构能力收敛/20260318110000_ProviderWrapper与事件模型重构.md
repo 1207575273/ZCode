@@ -86,7 +86,7 @@ Provider 保留原始值，Wrapper 做统一标准化：
 | `stop_sequence` | — | `stop_sequence` | 命中停止序列 |
 | — | `content_filter` | `content_filter` | 内容过滤 |
 
-标准化统一为 Anthropic 命名体系（ZCli 的 JSONL 日志已有 `end_turn` 的历史数据）。
+标准化统一为 Anthropic 命名体系（cCli 的 JSONL 日志已有 `end_turn` 的历史数据）。
 
 ### 2.5 未来扩展路线
 

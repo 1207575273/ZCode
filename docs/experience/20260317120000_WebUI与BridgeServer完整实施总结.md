@@ -1,4 +1,4 @@
-> 备注：项目原名 ZCli，2026-03-20 更名为 cCli（品牌名 CCode），详见 01_需求与项目管理核心文档/20260320030000_项目改名_ZCli到CCode.md
+> 备注：项目原名 cCli，2026-03-20 更名为 cCli（品牌名 CCode），详见 01_需求与项目管理核心文档/20260320030000_项目改名_ZCli到CCode.md
 
 # Phase 1 完整实施总结
 
@@ -44,7 +44,7 @@
 | Bridge Server 架构调研与规划 | `docs/plans/20260314230000_*` |
 | Bridge Server 实施总结 | `docs/plans/20260315030000_*` |
 | Session 生命周期与项目架构 | `docs/02_项目架构能力收敛/20260315040000_*` |
-| ZCli 完整能力清单 | `docs/02_项目架构能力收敛/20260315050000_*` |
+| cCli 完整能力清单 | `docs/02_项目架构能力收敛/20260315050000_*` |
 | Web UI 踩坑与前端工程经验（11 章） | `docs/experience/20260315120000_*` |
 | AgentLoop 事件模型重构规划 | `docs/plans/20260315140000_*` |
 | KillShell 工具设计与实施 | `docs/plans/20260315190000_*` |
@@ -59,7 +59,7 @@
 
 ```
 cCli/
-├── bin/zcli.ts                    CLI 入口（交互/Pipe/Web 三模式）
+├── bin/ccli.ts                    CLI 入口（交互/Pipe/Web 三模式）
 ├── src/
 │   ├── core/                      核心引擎
 │   │   ├── agent-loop.ts             AgentLoop（零改动）

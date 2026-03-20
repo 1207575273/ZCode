@@ -19,7 +19,7 @@ export interface McpConfig {
 
 /**
  * MCP 配置文件搜索路径（按优先级从高到低）：
- * 1. ~/.ccode/mcp.json   — ZCli 专属配置，优先级最高
+ * 1. ~/.ccode/mcp.json   — cCli 专属配置，优先级最高
  * 2. ~/.claude.json      — Claude Code 用户配置（含 mcpServers 字段）
  * 3. ~/.mcp.json         — 用户全局配置（通用 MCP 配置格式）
  *

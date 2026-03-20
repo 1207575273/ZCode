@@ -169,7 +169,7 @@ function ClaudeImportPanel() {
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-gray-400">检测本机 Claude Code 已安装的插件，一键导入到 ZCli。</p>
+      <p className="text-sm text-gray-400">检测本机 Claude Code 已安装的插件，一键导入到 cCli。</p>
 
       {claudePlugins.some(p => !p.alreadyImported) && (
         <button onClick={handleImportAll} disabled={!!importing}
@@ -299,7 +299,7 @@ function MarketplacePanel() {
           <a href="https://skills.sh/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
             skills.sh
           </a>
-          {' '}生态安装 skill，扩展 ZCli 的能力。
+          {' '}生态安装 skill，扩展 cCli 的能力。
         </p>
       </div>
 

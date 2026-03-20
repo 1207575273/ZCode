@@ -13,7 +13,7 @@ interface ProviderConfig {
   models: string[]
 }
 
-interface ZCliConfig {
+interface CCodeConfig {
   defaultProvider: string
   defaultModel: string
   providers: Record<string, ProviderConfig>
@@ -76,12 +76,12 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 
 function ProvidersTab() {
   const toast = useToast()
-  const [config, setConfig] = useState<ZCliConfig | null>(null)
+  const [config, setConfig] = useState<CCodeConfig | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    apiGet<{ config: ZCliConfig }>('/api/settings')
+    apiGet<{ config: CCodeConfig }>('/api/settings')
       .then(d => setConfig(d.config))
       .catch(e => setError(String(e)))
   }, [])
@@ -169,7 +169,7 @@ function ProvidersTab() {
             </div>
           </div>
         </div>
-        <p className="text-xs text-gray-500 mt-2">修改后点击"保存配置"生效（写入 ~/.zcli/config.json）</p>
+        <p className="text-xs text-gray-500 mt-2">修改后点击"保存配置"生效（写入 ~/.ccode/config.json）</p>
       </div>
 
       {/* Provider 列表 */}

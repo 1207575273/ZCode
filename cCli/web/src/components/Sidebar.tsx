@@ -13,7 +13,7 @@ const NAV_ITEMS = [
 export function Sidebar() {
   return (
     <nav className="w-40 bg-gray-900 border-r border-gray-700 flex flex-col py-3 px-2 gap-1 shrink-0">
-      <div className="text-xs text-gray-500 font-semibold px-2 mb-2 tracking-wide">ZCli</div>
+      <div className="text-xs text-gray-500 font-semibold px-2 mb-2 tracking-wide">CCode</div>
       {NAV_ITEMS.map(item => (
         item.disabled ? (
           <div

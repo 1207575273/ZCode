@@ -7,8 +7,8 @@ export function LogsPage() {
       <div className="bg-gray-800 rounded-lg p-6">
         <p className="text-gray-400 mb-4">日志浏览功能开发中。当前可直接查看 JSONL 文件：</p>
         <div className="bg-gray-900 rounded p-3 font-mono text-sm text-gray-300">
-          <p>会话日志: ~/.zcli/sessions/</p>
-          <p className="mt-1">数据库: ~/.zcli/data/zcli.db</p>
+          <p>会话日志: ~/.ccode/sessions/</p>
+          <p className="mt-1">数据库: ~/.ccode/data/ccode.db</p>
         </div>
         <p className="text-gray-500 text-xs mt-4">
           每个会话生成一个 JSONL 文件，包含完整的事件链（LLM 调用、工具执行、token 用量等）。
