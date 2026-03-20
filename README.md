@@ -122,3 +122,7 @@ pnpm dev
 ## License
 
 [BSL 1.1](./LICENSE) — 个人和非商业使用自由，商业使用需授权。
+
+---
+
+> 本项目原名 ZCli / ZCode，2026-03-20 更名为 CCode。完整的配置文档、插件系统、Hook 机制、权限管理等详细说明见 [HISTORY_README.md](./HISTORY_README.md)。
