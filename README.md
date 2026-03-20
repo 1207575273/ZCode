@@ -7,26 +7,52 @@
 [![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](./LICENSE)
 [![npm](https://img.shields.io/npm/v/ccode-cli)](https://www.npmjs.com/package/ccode-cli)
 
+```bash
+npm install -g ccode-cli
+```
+
 ---
 
-## 安装
+## 安装与使用
+
+### npm 安装（推荐）
 
 ```bash
-# npm 全局安装
+# 全局安装
 npm install -g ccode-cli
 
-# 或 npx 直接运行
+# 启动
+ccode
+```
+
+### npx 临时运行
+
+```bash
 npx ccode-cli
 ```
 
-安装后执行 `ccode` 进入交互式对话。
-
-## 从源码运行
+### 从源码运行
 
 ```bash
 cd cCli
 pnpm install
 pnpm dev
+```
+
+### 使用示例
+
+```bash
+# 交互式对话
+ccode
+
+# 单次提问（Pipe 模式）
+ccode "帮我看看这个项目的目录结构"
+
+# 恢复上次会话
+ccode --resume
+
+# 指定模型
+ccode -m glm-5
 ```
 
 ---
