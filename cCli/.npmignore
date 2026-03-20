@@ -21,6 +21,7 @@ nul
 *.test.ts
 *.spec.ts
 .zcli/
+.ccode/
 test/
 *.sh
 .nvmrc
