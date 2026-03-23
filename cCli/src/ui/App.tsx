@@ -243,6 +243,11 @@ export function App({
     return items
   }, [])
 
+  // 提取用户历史消息（从旧到新），用于 InputBar ↑↓ 翻阅
+  const userHistory = useMemo(() => {
+    return messages.filter(m => m.role === 'user').map(m => m.content)
+  }, [messages])
+
   // suggestions: 当输入以 "/" 开头时实时过滤可用指令，驱动建议浮层显示
   const suggestions: SuggestionItem[] = useMemo(() => {
     if (!inputValue.startsWith('/')) return []
@@ -882,6 +887,7 @@ export function App({
               interruptAndSubmit(text)
             }}
             streaming={isStreaming}
+            history={userHistory}
           />
         </>
       )}

@@ -6,6 +6,7 @@
  * 使用 ControlledMultilineInput（纯展示）+ 自管键盘逻辑。
  * Enter 提交，Alt+Enter 换行。
  * Home/Ctrl+A → 当前行首，End/Ctrl+E → 当前行尾。
+ * ↑↓ 在第一行/最后一行时翻阅历史输入。
  */
 
 import React, { useState, useEffect, useRef } from 'react'
@@ -20,6 +21,8 @@ interface InputBarProps {
   onInterruptSubmit?: ((value: string) => void) | undefined
   placeholder?: string
   streaming?: boolean
+  /** 历史用户输入消息列表（从旧到新），用于 ↑↓ 翻阅 */
+  history?: string[]
 }
 
 function normalizeLineEndings(text: string): string {
@@ -46,6 +49,7 @@ export function InputBar({
                            onInterruptSubmit,
                            placeholder = 'Try "how does <filepath> work?"',
                            streaming = false,
+                           history = [],
                          }: InputBarProps) {
   const { columns } = useTerminalSize()
 
@@ -53,6 +57,11 @@ export function InputBar({
   const { stdin } = useStdin()
 
   const [cursorIndex, setCursorIndex] = useState(value.length)
+
+  // ─── 历史翻阅状态 ───
+  // historyIndex: -1 = 当前 draft，0 = 最近一条历史，1 = 倒数第二条...
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const draftRef = useRef(value)  // 保存用户未发送的输入
 
   const valueRef = useRef(value)
   const cursorRef = useRef(cursorIndex)
@@ -100,9 +109,54 @@ export function InputBar({
     return () => { stdin.removeListener('data', onData) }
   }, [stdin])
 
+  /** 用户编辑时：如果正在浏览历史，把当前内容设为新 draft 并回到最新页 */
+  function onUserEdit(newValue: string) {
+    if (historyIndex !== -1) {
+      draftRef.current = newValue
+      setHistoryIndex(-1)
+    }
+  }
+
+  /** 判断光标是否在第一行 */
+  function isCursorOnFirstLine(): boolean {
+    return value.lastIndexOf('\n', cursorIndex - 1) === -1
+  }
+
+  /** 判断光标是否在最后一行 */
+  function isCursorOnLastLine(): boolean {
+    return value.indexOf('\n', cursorIndex) === -1
+  }
+
+  /** 翻阅历史：填入指定 index 的内容 */
+  function navigateHistory(newIndex: number) {
+    if (newIndex < -1 || newIndex >= history.length) return
+
+    // 首次离开 draft 时保存当前输入
+    if (historyIndex === -1) {
+      draftRef.current = value
+    }
+
+    setHistoryIndex(newIndex)
+
+    let newValue: string
+    if (newIndex === -1) {
+      // 回到 draft
+      newValue = draftRef.current
+    } else {
+      // 从历史取（history 从旧到新，index=0 对应最新一条）
+      newValue = history[history.length - 1 - newIndex]!
+    }
+
+    onChange(newValue)
+    setCursorIndex(newValue.length)
+  }
+
   function handleSubmit(text: string) {
     const trimmed = text.trim()
     if (!trimmed) return
+    // 提交后重置历史状态
+    setHistoryIndex(-1)
+    draftRef.current = ''
     if (streaming && onInterruptSubmit) {
       onInterruptSubmit(trimmed)
     } else {
@@ -130,6 +184,7 @@ export function InputBar({
     // Newline: Alt+Enter
     if (key.return && key.meta) {
       const newValue = value.slice(0, cursorIndex) + '\n' + value.slice(cursorIndex)
+      onUserEdit(newValue)
       onChange(newValue)
       setCursorIndex(cursorIndex + 1)
       return
@@ -150,8 +205,16 @@ export function InputBar({
       return
     }
 
-    // ↑ 上箭头
+    // ↑ 上箭头：第一行时翻历史，否则正常上移光标
     if (key.upArrow) {
+      if (isCursorOnFirstLine() && history.length > 0) {
+        // 翻历史（往旧的方向）
+        if (historyIndex < history.length - 1) {
+          navigateHistory(historyIndex + 1)
+        }
+        return
+      }
+      // 正常多行上移
       const lines = normalizeLineEndings(value).split('\n')
       let currentLineIndex = 0
       let currentPos = 0
@@ -179,8 +242,14 @@ export function InputBar({
       return
     }
 
-    // ↓ 下箭头
+    // ↓ 下箭头：最后一行时翻历史，否则正常下移光标
     if (key.downArrow) {
+      if (isCursorOnLastLine() && historyIndex >= 0) {
+        // 翻历史（往新的方向）
+        navigateHistory(historyIndex - 1)
+        return
+      }
+      // 正常多行下移
       const lines = normalizeLineEndings(value).split('\n')
       let currentLineIndex = 0
       let currentPos = 0
@@ -224,6 +293,7 @@ export function InputBar({
     if (key.backspace) {
       if (cursorIndex > 0) {
         const newValue = value.slice(0, cursorIndex - 1) + value.slice(cursorIndex)
+        onUserEdit(newValue)
         onChange(newValue)
         setCursorIndex(cursorIndex - 1)
       }
@@ -234,6 +304,7 @@ export function InputBar({
     if (key.delete) {
       if (cursorIndex < value.length) {
         const newValue = value.slice(0, cursorIndex) + value.slice(cursorIndex + 1)
+        onUserEdit(newValue)
         onChange(newValue)
       }
       return
@@ -242,6 +313,7 @@ export function InputBar({
     // 普通文本输入
     if (input && !key.ctrl && !key.meta) {
       const newValue = value.slice(0, cursorIndex) + input + value.slice(cursorIndex)
+      onUserEdit(newValue)
       onChange(newValue)
       setCursorIndex(cursorIndex + input.length)
     }
