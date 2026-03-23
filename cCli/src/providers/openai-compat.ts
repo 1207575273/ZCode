@@ -27,7 +27,7 @@ export class OpenAICompatProvider implements LLMProvider {
       model: request.model,
       ...(request.maxTokens !== undefined && { maxTokens: request.maxTokens }),
       ...(request.temperature !== undefined && { temperature: request.temperature }),
-      ...(this.#config.baseURL !== undefined && { configuration: { baseURL: this.#config.baseURL } }),
+      ...(this.#config.baseURL !== undefined && { configuration: { baseURL: this.#config.baseURL, apiKey: this.#config.apiKey } }),
     })
 
     // 有工具时绑定，转换为 OpenAI function calling 标准格式
