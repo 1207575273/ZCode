@@ -51,6 +51,17 @@ npx ccode-cli
 - **SubAgent** — 后台并行运行，`Ctrl+B` 实时查看
 - **Claude Code 兼容** — CLAUDE.md、.mcp.json、插件目录零迁移
 
+## 快捷键
+
+| 操作 | 按键 | 备用按键 |
+|------|------|----------|
+| 提交输入 | Enter | — |
+| 换行（多行输入） | Alt+Enter | Shift+Alt+Enter |
+| 光标移动 | ↑ ↓ ← → | — |
+| 跳到当前行首 | Home | Ctrl+A |
+| 跳到当前行尾 | End | Ctrl+E |
+| 查看 SubAgent 面板 | Ctrl+B | — |
+
 ## 常用指令
 
 | 指令 | 说明 |
