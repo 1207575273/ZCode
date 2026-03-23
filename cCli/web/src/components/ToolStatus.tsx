@@ -51,6 +51,35 @@ function formatArgsSummary(_toolName: string, args: Record<string, unknown>): st
 /** 输出预览最大行数 */
 const MAX_PREVIEW_LINES = 4
 
+/**
+ * 从工具 args 中提取可展示的详细内容。
+ * 某些工具（write_file/edit_file）的 output 只有摘要，但 args 里有完整数据。
+ */
+function extractArgsDetail(toolName: string, args: Record<string, unknown>): string | null {
+  if (toolName === 'write_file') {
+    const content = args['content']
+    const path = args['file_path'] ?? args['path'] ?? ''
+    if (typeof content === 'string') {
+      return `📄 ${path}\n${'─'.repeat(40)}\n${content}`
+    }
+  }
+  if (toolName === 'edit_file') {
+    const oldStr = args['old_string']
+    const newStr = args['new_string']
+    const path = args['file_path'] ?? args['path'] ?? ''
+    if (typeof oldStr === 'string' && typeof newStr === 'string') {
+      return `📄 ${path}\n${'─'.repeat(20)} old ${'─'.repeat(20)}\n${oldStr}\n${'─'.repeat(20)} new ${'─'.repeat(20)}\n${newStr}`
+    }
+  }
+  if (toolName === 'bash') {
+    const cmd = args['command']
+    if (typeof cmd === 'string') {
+      return `$ ${cmd}`
+    }
+  }
+  return null
+}
+
 interface Props {
   events: ToolEvent[]
   /** SubAgent 数据，用于在 dispatch_agent 工具条目旁渲染详情卡片 */
@@ -100,11 +129,20 @@ function ToolStatusItem({ event }: { event: ToolEvent }) {
     : event.success ? 'text-green-400' : 'text-red-400'
   const textClass = isRunning ? 'text-gray-400' : event.success ? 'text-green-400/80' : 'text-red-400/80'
 
-  // 输出子块
-  const hasOutput = !isRunning && Boolean(event.resultSummary?.trim())
-  const outputLines = event.resultSummary?.split('\n') ?? []
+  // 输出内容：优先使用 resultFull（Web 完整展示），fallback 到 resultSummary（旧数据兼容）
+  const outputContent = event.resultFull ?? event.resultSummary ?? ''
+  // 从 args 中提取详细内容（write_file 的完整文件内容、edit_file 的 diff 等）
+  const argsDetail = extractArgsDetail(event.toolName, event.args)
+  // 合并展示：args 详情（输入）+ output（执行结果）
+  const fullDisplay = [argsDetail, outputContent.trim() ? outputContent : null].filter(Boolean).join('\n\n📋 输出:\n')
+  const hasOutput = !isRunning && Boolean(fullDisplay.trim())
+  const hasFull = Boolean(event.resultFull?.trim()) || Boolean(argsDetail)
+
+  // 折叠态预览：取前 4 行
+  const outputLines = fullDisplay.split('\n')
   const previewLines = outputLines.slice(0, MAX_PREVIEW_LINES)
   const remaining = outputLines.length - previewLines.length
+  const charCount = fullDisplay.length
 
   return (
     <div className="text-sm">
@@ -124,16 +162,33 @@ function ToolStatusItem({ event }: { event: ToolEvent }) {
         )}
       </div>
 
-      {/* 输出子块：border-left + 缩进 */}
+      {/* 输出子块 */}
       {hasOutput && expanded && (
         <div className="ml-5 mt-0.5 border-l-2 border-gray-700 pl-2 mb-1">
-          {previewLines.map((line, i) => (
-            <pre key={i} className="text-xs text-gray-500 font-mono whitespace-pre-wrap leading-relaxed">
-              {line}
-            </pre>
-          ))}
-          {remaining > 0 && (
-            <span className="text-xs text-gray-600">... +{remaining} lines</span>
+          {hasFull ? (
+            <>
+              {/* 完整内容：滚动容器 */}
+              <pre className="text-xs text-gray-400 font-mono whitespace-pre-wrap leading-relaxed max-h-[400px] overflow-y-auto bg-gray-900/50 rounded p-2">
+                {fullDisplay}
+              </pre>
+              {charCount > 500 && (
+                <span className="text-xs text-gray-600 mt-0.5 block">
+                  {charCount.toLocaleString()} chars · {outputLines.length} lines
+                </span>
+              )}
+            </>
+          ) : (
+            <>
+              {/* 旧数据 fallback：摘要预览 */}
+              {previewLines.map((line, i) => (
+                <pre key={i} className="text-xs text-gray-500 font-mono whitespace-pre-wrap leading-relaxed">
+                  {line}
+                </pre>
+              ))}
+              {remaining > 0 && (
+                <span className="text-xs text-gray-600">... +{remaining} lines</span>
+              )}
+            </>
           )}
         </div>
       )}

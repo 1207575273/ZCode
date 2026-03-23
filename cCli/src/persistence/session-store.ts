@@ -130,6 +130,7 @@ export class SessionStore {
         if (event.durationMs != null) toolEvt.durationMs = event.durationMs
         if (event.success != null) toolEvt.success = event.success
         if (event.resultSummary != null) toolEvt.resultSummary = event.resultSummary
+        if (event.resultFull != null) toolEvt.resultFull = event.resultFull
         pendingTools.push(toolEvt)
       }
 
@@ -428,6 +429,7 @@ export class SessionStore {
               ...(ev.durationMs !== undefined ? { durationMs: ev.durationMs } : {}),
               ...(ev.success !== undefined ? { success: ev.success } : {}),
               ...(ev.resultSummary !== undefined ? { resultSummary: ev.resultSummary } : {}),
+              ...(ev.resultFull !== undefined ? { resultFull: ev.resultFull } : {}),
             })
           } else if (ev.type === 'assistant' && typeof ev.message?.content === 'string') {
             detailEvents.push({

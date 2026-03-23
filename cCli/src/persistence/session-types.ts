@@ -76,7 +76,8 @@ export interface SessionEvent {
 
   /** 工具/MCP 相关 */
   success?: boolean
-  resultSummary?: string     // 结果摘要（截断）
+  resultSummary?: string     // 结果摘要（截断，200 字符，CLI 展示用）
+  resultFull?: string        // 完整结果（上限 100,000 字符，Web 展示用）
   serverName?: string
   transport?: string
   toolCount?: number         // MCP 发现的工具数
@@ -123,6 +124,7 @@ export interface SnapshotToolEvent {
   durationMs?: number
   success?: boolean
   resultSummary?: string
+  resultFull?: string
 }
 
 export interface SessionSnapshot {
@@ -184,7 +186,7 @@ export interface SubagentSnapshot {
 /** SubAgent 事件详情 */
 export type SubagentSnapshotEvent =
   | { kind: 'tool_start'; toolName: string; toolCallId: string; args?: Record<string, unknown> }
-  | { kind: 'tool_done'; toolName: string; toolCallId: string; durationMs?: number; success?: boolean; resultSummary?: string }
+  | { kind: 'tool_done'; toolName: string; toolCallId: string; durationMs?: number; success?: boolean; resultSummary?: string; resultFull?: string }
   | { kind: 'text'; text: string }
   | { kind: 'error'; error: string }
 

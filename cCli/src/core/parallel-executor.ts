@@ -40,6 +40,7 @@ export interface ClassifiedToolCalls {
 
 const DEFAULT_MAX_PARALLEL = 5
 const RESULT_SUMMARY_MAX_LEN = 200
+const RESULT_FULL_MAX_LEN = 100_000
 
 // ═══════════════════════════════════════════════
 // 核心函数
@@ -156,9 +157,13 @@ async function executeSingleTool(
     const result = await registry.execute(tc.toolName, tc.args, ctx)
     const durationMs = Date.now() - startTime
 
-    const resultSummary = result.success
-      ? (result.output.length > RESULT_SUMMARY_MAX_LEN ? result.output.slice(0, RESULT_SUMMARY_MAX_LEN) + '...' : result.output)
-      : (result.error ?? 'error')
+    const rawOutput = result.success ? result.output : (result.error ?? 'error')
+    const resultSummary = rawOutput.length > RESULT_SUMMARY_MAX_LEN
+      ? rawOutput.slice(0, RESULT_SUMMARY_MAX_LEN) + '...'
+      : rawOutput
+    const resultFull = rawOutput.length > RESULT_FULL_MAX_LEN
+      ? rawOutput.slice(0, RESULT_FULL_MAX_LEN) + `\n... (truncated, total ${rawOutput.length} chars)`
+      : rawOutput
 
     onEvent({
       type: 'tool_done',
@@ -167,6 +172,7 @@ async function executeSingleTool(
       durationMs,
       success: result.success,
       ...(resultSummary.length > 0 ? { resultSummary } : {}),
+      resultFull,
     })
 
     const toolResult: ParallelToolResult = {
@@ -183,6 +189,7 @@ async function executeSingleTool(
     const errorMsg = err instanceof Error ? err.message : String(err)
 
     const resultSummary = errorMsg.slice(0, RESULT_SUMMARY_MAX_LEN)
+    const resultFull = errorMsg.slice(0, RESULT_FULL_MAX_LEN)
     onEvent({
       type: 'tool_done',
       toolName: tc.toolName,
@@ -190,6 +197,7 @@ async function executeSingleTool(
       durationMs,
       success: false,
       resultSummary,
+      resultFull,
     })
 
     return {

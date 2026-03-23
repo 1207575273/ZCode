@@ -42,6 +42,7 @@ interface SessionDetail {
       durationMs?: number
       success?: boolean
       resultSummary?: string
+      resultFull?: string
     }>
   }>
   subagents?: SubagentSnapshot[]

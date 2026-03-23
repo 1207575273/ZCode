@@ -103,6 +103,7 @@ export interface ToolEvent {
   durationMs?: number
   success?: boolean
   resultSummary?: string
+  resultFull?: string
 }
 
 /** SubAgent JSONL 回放快照（session_init 携带） */

@@ -123,6 +123,7 @@ export class SessionLogger {
           durationMs: event.durationMs,
           success: event.success,
           ...(event.resultSummary !== undefined ? { resultSummary: event.resultSummary } : {}),
+          ...(event.resultFull !== undefined ? { resultFull: event.resultFull } : {}),
         })
         break
 

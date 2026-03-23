@@ -67,7 +67,7 @@ export type AgentEvent =
   | { type: 'text';               text: string }
   | { type: 'thinking';           text: string }
   | { type: 'tool_start';         toolName: string; toolCallId: string; args: Record<string, unknown> }
-  | { type: 'tool_done';          toolName: string; toolCallId: string; durationMs: number; success: boolean; resultSummary?: string; meta?: ToolResultMeta }
+  | { type: 'tool_done';          toolName: string; toolCallId: string; durationMs: number; success: boolean; resultSummary?: string; resultFull?: string; meta?: ToolResultMeta }
   | { type: 'permission_request'; toolName: string; args: Record<string, unknown>; resolve: (allow: boolean) => void }
   | { type: 'user_question_request'; questions: UserQuestion[]; resolve: (result: UserQuestionResult) => void }
   | { type: 'error';              error: string }
@@ -116,8 +116,10 @@ export interface AgentConfig {
 /** 主 Agent 默认最大轮次 */
 const DEFAULT_MAX_TURNS = 50
 
-/** resultSummary 最大长度 */
+/** resultSummary 最大长度（CLI 展示用） */
 const RESULT_SUMMARY_MAX_LENGTH = 200
+/** resultFull 最大长度（Web 展示 + JSONL 持久化用，超过此长度截断） */
+const RESULT_FULL_MAX_LENGTH = 100_000
 
 // ═══════════════════════════════════════════════
 // AgentLoop 类
@@ -383,13 +385,13 @@ export class AgentLoop {
         : `[Tool ${tc.toolName} error]: ${result.error ?? 'error'}`,
     })
 
-    const resultSummary = result.success
-      ? truncate(result.output, RESULT_SUMMARY_MAX_LENGTH)
-      : (result.error ?? 'error')
+    const rawOutput = result.success ? result.output : (result.error ?? 'error')
+    const resultSummary = truncate(rawOutput, RESULT_SUMMARY_MAX_LENGTH)
+    const resultFull = truncate(rawOutput, RESULT_FULL_MAX_LENGTH)
 
     yield {
       type: 'tool_done', toolName: tc.toolName, toolCallId: tc.toolCallId,
-      durationMs, success: result.success, resultSummary,
+      durationMs, success: result.success, resultSummary, resultFull,
       ...(result.meta !== undefined ? { meta: result.meta } : {}),
     }
   }
@@ -418,7 +420,10 @@ export class AgentLoop {
 // ═══════════════════════════════════════════════
 
 function truncate(text: string, maxLength: number): string {
-  return text.length > maxLength ? text.slice(0, maxLength) + '...' : text
+  if (text.length <= maxLength) return text
+  return maxLength >= 10000
+    ? text.slice(0, maxLength) + `\n... (truncated, total ${text.length} chars)`
+    : text.slice(0, maxLength) + '...'
 }
 
 /**

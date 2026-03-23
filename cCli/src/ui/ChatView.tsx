@@ -24,6 +24,7 @@ export interface CompletedToolCall {
   durationMs: number
   success: boolean
   resultSummary?: string
+  resultFull?: string
   /** 结构化元数据，用于渲染丰富的工具结果展示（diff、文件预览等） */
   meta?: ToolResultMeta
 }
